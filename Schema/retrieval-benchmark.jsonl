@@ -1,0 +1,6 @@
+{"expected_ids":["concept-knowledge-separation"],"profile":"default-research","query":"knowledge separation","type":"concept"}
+{"expected_ids":["topic-knowledge-operating-systems"],"profile":"default-research","query":"knowledge operating systems","type":"topic"}
+{"expected_ids":["synthesis-knowledge-os-architecture"],"profile":"default-research","query":"knowledge os architecture","type":"synthesis"}
+{"expected_ids":["investigation-durable-knowledge-promotion"],"profile":"default-research","query":"durable knowledge promotion investigation","type":"research"}
+{"expected_ids":["decision-use-derived-graph"],"profile":"default-research","query":"knowledge architecture derived graph","type":"decision"}
+{"expected_ids":["synthesis-knowledge-os-architecture","concept-knowledge-separation"],"profile":"default-research","query":"evidence reusable understanding research memory decisions","type":"synthesis"}

@@ -322,13 +322,18 @@ def search_rows(query):
         score+=min(25,5*len(q&set(tokenize(b))))
         if score: rows.append((score,p,d,b))
     priority={t:i for i,t in enumerate(("synthesis","comparison","concept","topic","entity","project"))}
-    rows.sort(key=lambda x:(-x[0],priority.get(x[2].get("type"),99),"" if x[2].get("updated") else "~",str(x[2].get("updated","") or ""),rel(x[1])))
+    rows.sort(key=lambda x:(-x[0],priority.get(x[2].get("type"),99),-(int(str(x[2].get("updated","")).replace('-','') or 0)),rel(x[1])))
     return rows
 
 def expanded(query,profile):
     seeds=search_rows(query)[:8]; scores={d["id"]:s for s,p,d,b in seeds}; seedids=set(scores); rec={d["id"]:(p,d,b) for p,d,b in all_records() if d.get("id")}; edges=graph_rows()
     for ident,(p,d,b) in rec.items():
         if ident in seedids: continue
+        typ=d.get("type")
+        if typ == "source" or typ == "context-profile": continue
+        if typ in {"episodic-memory","preference-memory","observation-memory"} and not profile.get("include_memory",False): continue
+        if typ in {"investigation","research-question","finding","research-open"} and not profile.get("include_research",True): continue
+        if typ == "decision" and not profile.get("include_decisions",True): continue
         bonus=0
         if any(e["source"]=="frontmatter" and ((e["from"]==ident and e["to"] in seedids) or (e["to"]==ident and e["from"] in seedids)) for e in edges): bonus+=25
         if any(e["source"]=="wikilink" and ((e["from"]==ident and e["to"] in seedids) or (e["to"]==ident and e["from"] in seedids)) for e in edges): bonus+=20
