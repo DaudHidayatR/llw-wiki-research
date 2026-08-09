@@ -15,6 +15,14 @@ migrate --check
 migrate --apply
 ```
 
+`migrate --apply` creates an integrity-checked anonymous rollback snapshot, applies only an unambiguous safe plan, rebuilds derived artifacts, and runs deterministic lint. It **does not execute repository-controlled Python tests inside the privileged migration process**. After a successful apply, the caller must run:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+This separation is deliberate: tests remain a required acceptance check, but migration never grants untrusted repository code the authority to mutate the vault or external filesystem.
+
 #### Source management
 
 ```text

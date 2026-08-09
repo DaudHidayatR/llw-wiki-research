@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic schema-2 Knowledge OS maintenance CLI (stdlib only)."""
 from __future__ import annotations
-import argparse, datetime as dt, hashlib, json, os, re, shutil, subprocess, sys, tempfile, unicodedata
+import argparse, datetime as dt, hashlib, json, os, re, shutil, subprocess, sys, tarfile, tempfile, unicodedata
 from pathlib import Path
 
 ROOT = Path(os.environ.get("WIKI_ROOT", Path(__file__).resolve().parents[1])).resolve()
@@ -100,7 +100,9 @@ def render(data, body):
         else: lines.append(f"{k}: {dump_value(v)}")
     return "\n".join(lines)+"\n---\n"+body
 
-def write_note(path,data,body): path.parent.mkdir(parents=True,exist_ok=True); path.write_text(render(data,body),encoding="utf-8",newline="\n")
+def write_note(path,data,body):
+    if not safe_repository_target(path):raise OSError(f"unsafe repository target: {path}")
+    path.parent.mkdir(parents=True,exist_ok=True); path.write_text(render(data,body),encoding="utf-8",newline="\n")
 def slugify(s):
     s=unicodedata.normalize("NFKD",s); s="".join(c for c in s if not unicodedata.combining(c)); s=s.encode("ascii","ignore").decode().lower(); return re.sub(r"^-|-$","",re.sub(r"-+","-",re.sub(r"[^a-z0-9]+","-",s)))
 def body_hash(body): return "sha256:"+hashlib.sha256(body.replace("\r\n","\n").replace("\r","\n").encode()).hexdigest()
@@ -142,7 +144,17 @@ def source_manifest_path(): return ROOT/"Schema/source-manifest.jsonl"
 def load_jsonl(path):
     if not path.exists(): return []
     return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
-def write_jsonl(path,rows): path.parent.mkdir(parents=True,exist_ok=True); path.write_text("".join(jsonline(x)+"\n" for x in rows),encoding="utf-8",newline="\n")
+def write_jsonl(path,rows):
+    if not safe_repository_target(path):raise OSError(f"unsafe repository target: {path}")
+    path.parent.mkdir(parents=True,exist_ok=True); path.write_text("".join(jsonline(x)+"\n" for x in rows),encoding="utf-8",newline="\n")
+def safe_repository_target(path):
+    try:path.absolute().relative_to(ROOT)
+    except ValueError:return False
+    current=ROOT
+    for part in path.absolute().relative_to(ROOT).parts[:-1]:
+        current=current/part
+        if current.is_symlink():return False
+    return not path.is_symlink()
 
 def source_rows(preserve=True):
     old={x["path"]:x for x in load_jsonl(source_manifest_path())} if preserve else {}
@@ -322,6 +334,7 @@ def hash_action(a):
     if bad: print("source-hash: FAIL\n"+"\n".join(bad)); return 1
     prepared=None
     if a.mode=="accept-change":
+        if not safe_repository_target(source_manifest_path()):print("source: unsafe repository target",file=sys.stderr);return 1
         try:
             rows=source_rows(); refs=[rel(x) for x,y,z in all_records() if target.as_posix() in y.get("sources",[])]
             prepared=(rows,refs)
@@ -351,6 +364,8 @@ def hash_action(a):
 
 def cmd_source_scan(a):
     if not safe_source_root():return 1
+    manifest=source_manifest_path()
+    if (a.update or a.accept_covered) and not safe_repository_target(manifest):print("source: unsafe repository target",file=sys.stderr);return 1
     rows=checked_source_rows()
     if rows is None:return 1
     if a.accept_covered:
@@ -545,15 +560,39 @@ def tree_state():
         elif p.is_file():out[rp]=hashlib.sha256(p.read_bytes()).hexdigest()
     return out
 def backup_tree():
-    parent=Path(tempfile.mkdtemp());backup=parent/'root'
-    shutil.copytree(ROOT,backup,symlinks=True,ignore=lambda p,n:{'.git'} if Path(p).resolve()==ROOT else set())
-    return backup
-def restore_tree(backup):
-    for p in ROOT.iterdir():
-        if p.name=='.git':continue
-        if p.is_symlink() or p.is_file():p.unlink()
-        else:shutil.rmtree(p)
-    shutil.copytree(backup,ROOT,dirs_exist_ok=True,symlinks=True)
+    snapshot=tempfile.TemporaryFile()
+    try:
+        with tarfile.open(fileobj=snapshot,mode='w') as archive:
+            for p in sorted(ROOT.iterdir()):
+                if p.name!='.git':archive.add(p,arcname=p.name)
+        validate_snapshot(snapshot);return snapshot
+    except BaseException:
+        snapshot.close();raise
+def validate_snapshot(snapshot):
+    snapshot.seek(0)
+    with tarfile.open(fileobj=snapshot,mode='r') as archive:
+        for member in archive.getmembers():
+            path=Path(member.name)
+            if path.is_absolute() or '..' in path.parts:raise ValueError(f'unsafe snapshot member {member.name}')
+            if member.issym():raise ValueError(f'symlink in migration snapshot {member.name}')
+            if member.islnk() and (Path(member.linkname).is_absolute() or '..' in Path(member.linkname).parts):raise ValueError(f'unsafe hardlink {member.linkname}')
+    snapshot.seek(0)
+def restore_tree(snapshot):
+    validate_snapshot(snapshot);staging=Path(tempfile.mkdtemp(prefix='.wiki-restore-',dir=ROOT.parent));old=ROOT.parent/(ROOT.name+'.migration-failed')
+    try:
+        snapshot.seek(0)
+        with tarfile.open(fileobj=snapshot,mode='r') as archive:archive.extractall(staging)
+        if os.path.lexists(old):raise OSError(f'recovery path already exists: {old}')
+        os.replace(ROOT,old)
+        try:
+            os.replace(staging,ROOT)
+            if (old/'.git').exists():os.replace(old/'.git',ROOT/'.git')
+        except BaseException:
+            if not ROOT.exists() and old.exists():os.replace(old,ROOT)
+            raise
+        shutil.rmtree(old)
+    finally:
+        if staging.exists():shutil.rmtree(staging,ignore_errors=True)
 def migration_symlink_issues():
     return [{'path':p.relative_to(ROOT).as_posix(),'reason':'symlink not allowed during migration'} for p in sorted(ROOT.rglob('*')) if '.git' not in p.parts and p.is_symlink()]
 def migration_candidates():
@@ -565,8 +604,11 @@ def migration_candidates():
         except (OSError,ValueError):issues.append({'path':rp,'reason':'path escapes repository'});continue
         try:d,b=parse(p)
         except (FrontmatterError,OSError,UnicodeError) as e:issues.append({'path':rp,'reason':f'unparseable Markdown: {e}'});continue
-        tags=d.get("tags",[]); inferred=[x for x in tags if x in WIKI_TYPES]
-        typ=d.get("type")
+        tags=d.get("tags",[]);typ=d.get("type");title=d.get("title","")
+        if not isinstance(tags,list) or not all(isinstance(x,str) for x in tags):out.append((p,d,b,None,"tags must be a flat string list"));continue
+        if typ is not None and not isinstance(typ,str):out.append((p,d,b,None,"type must be a string"));continue
+        if not isinstance(title,str):out.append((p,d,b,None,"title must be a string"));continue
+        inferred=[x for x in tags if x in WIKI_TYPES]
         if typ and inferred and inferred!=[typ]:out.append((p,d,b,None,"type conflicts with tags"));continue
         if not typ:
             if len(inferred)!=1:out.append((p,d,b,None,"requires exactly one compiled-note type tag"));continue
@@ -642,14 +684,15 @@ def cmd_migrate(a):
         checkpoint="knowledge-os-pre-migrate-"+dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         tag=subprocess.run(["git","tag",checkpoint],cwd=ROOT,text=True,capture_output=True)
         if tag.returncode:print("migrate: checkpoint failed: "+tag.stderr.strip(),file=sys.stderr);return 1
-    backup=backup_tree()
+    try:backup=backup_tree()
+    except Exception as e:print(f"migrate: snapshot failed before mutation: {e}",file=sys.stderr);return 1
     try:
         if cls=="D":
             for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
-            cmd_build(quiet=True);tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True);errors=lint_errors(False)
-            if tests.returncode or errors:
-                print(tests.stdout+tests.stderr,file=sys.stderr);print("\n".join(errors),file=sys.stderr);restore_tree(backup);print("migrate: already schema 2; validation FAIL");return 1
-            print("migrate: already schema 2; validation PASS");return 0
+            cmd_build(quiet=True);errors=lint_errors(False)
+            if errors:
+                print("\n".join(errors),file=sys.stderr);restore_tree(backup);print("migrate: already schema 2; validation FAIL");return 1
+            print("migrate: already schema 2; validation PASS; run tests separately");return 0
         raw_candidates,_=migration_candidates();candidates={p.relative_to(ROOT).as_posix():(p,d,b,t,e) for p,d,b,t,e in raw_candidates}
         used={d.get("id") for p,d,b,t,e in candidates.values() if d.get("id")}
         for item in plan["frontmatter_transformations"]:
@@ -660,15 +703,15 @@ def cmd_migrate(a):
         stop=ROOT/"Schema/search-stopwords.txt"
         if not stop.exists():stop.write_text("a\nan\nand\nthe\n",encoding="utf-8")
         cmd_build(quiet=True)
-        tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True);errors=lint_errors(False)
-        if tests.returncode or errors:
-            print(tests.stdout+tests.stderr,file=sys.stderr);print("\n".join(errors),file=sys.stderr);restore_tree(backup);return 1
-        print("migrate: apply PASS; build, graph, tests, lint PASS");return 0
-    except Exception as e:
+        errors=lint_errors(False)
+        if errors:
+            print("\n".join(errors),file=sys.stderr);restore_tree(backup);return 1
+        print("migrate: apply PASS; build and lint PASS; run tests separately");return 0
+    except BaseException as e:
         try:restore_tree(backup)
-        except Exception as rollback:print(f"migrate: apply failed ({e}); rollback failed ({rollback})",file=sys.stderr);return 1
+        except BaseException as rollback:print(f"migrate: apply failed ({e}); rollback failed ({rollback})",file=sys.stderr);return 1
         print(f"migrate: apply failed and rolled back: {e}",file=sys.stderr);return 1
-    finally:shutil.rmtree(backup.parent,ignore_errors=True)
+    finally:backup.close()
 
 def list_cmd(base,a):
     rows=simple_catalog(base,("type","title","status","importance","subject","scope","updated"))

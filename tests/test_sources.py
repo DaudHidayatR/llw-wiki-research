@@ -35,4 +35,11 @@ class SourceTests(unittest.TestCase):
   for args in [('source-hash','--update-missing'),('source-scan','--update'),('source-lint',),('source-delta',),('source-coverage',)]:
    with self.subTest(args=args):
     v=base();outside=Path(tempfile.mkdtemp());shutil.rmtree(v/'Raw/Sources');(v/'Raw/Sources').symlink_to(outside,target_is_directory=True);(outside/'evidence.md').write_text('external');before=pbytes(outside);r=run(v,*args);self.assertNotEqual(r.returncode,0);self.assertIn('unsafe source root',r.stdout+r.stderr);self.assertEqual(before,pbytes(outside));shutil.rmtree(v);shutil.rmtree(outside)
+ def test_source_updates_reject_symlinked_schema_or_manifest(self):
+  for direct in (False,True):
+   with self.subTest(direct=direct):
+    v=base();source(v);outside=Path(tempfile.mkdtemp());manifest=v/'Schema/source-manifest.jsonl'
+    if direct:manifest.symlink_to(outside/'manifest.jsonl')
+    else:shutil.rmtree(v/'Schema');(v/'Schema').symlink_to(outside,target_is_directory=True)
+    r=run(v,'source-scan','--update');self.assertNotEqual(r.returncode,0);self.assertIn('unsafe repository target',r.stdout+r.stderr);self.assertEqual(list(outside.iterdir()),[]);shutil.rmtree(v);shutil.rmtree(outside)
 if __name__=='__main__':unittest.main()
