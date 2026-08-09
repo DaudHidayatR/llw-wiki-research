@@ -3,6 +3,9 @@
 {"from":"concept-knowledge-separation","relation":"links-to","source":"wikilink","to":"topic-knowledge-operating-systems"}
 {"from":"concept-knowledge-separation","relation":"part-of","source":"frontmatter","to":"topic-knowledge-operating-systems"}
 {"from":"concept-knowledge-separation","relation":"supported-by","source":"sources","to":"Raw/Sources/knowledge-os-starter-demo.md"}
+{"from":"decision-use-derived-graph","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}
+{"from":"decision-use-flat-markdown-only","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}
+{"from":"episodic-memory-bootstrap-completed","relation":"links-to","source":"wikilink","to":"topic-knowledge-operating-systems"}
 {"from":"investigation-durable-knowledge-promotion","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"investigation-durable-knowledge-promotion","relation":"links-to","source":"wikilink","to":"source-knowledge-os-starter-demo"}
 {"from":"investigation-durable-knowledge-promotion","relation":"supported-by","source":"sources","to":"Raw/Sources/knowledge-os-starter-demo.md"}
