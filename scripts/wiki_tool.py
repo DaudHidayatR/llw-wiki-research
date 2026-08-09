@@ -326,14 +326,17 @@ def search_rows(query):
     return rows
 
 def expanded(query,profile):
-    seeds=search_rows(query)[:8]; scores={d["id"]:s for s,p,d,b in seeds}; seedids=set(scores); rec={d["id"]:(p,d,b) for p,d,b in all_records() if d.get("id")}; edges=graph_rows()
-    for ident,(p,d,b) in rec.items():
-        if ident in seedids: continue
+    def eligible(d):
         typ=d.get("type")
-        if typ == "source" or typ == "context-profile": continue
-        if typ in {"episodic-memory","preference-memory","observation-memory"} and not profile.get("include_memory",False): continue
-        if typ in {"investigation","research-question","finding","research-open"} and not profile.get("include_research",True): continue
-        if typ == "decision" and not profile.get("include_decisions",True): continue
+        if typ in {"source","context-profile","log"}: return False
+        if typ in {"episodic-memory","preference-memory","observation-memory"}: return bool(profile.get("include_memory",False))
+        if typ in {"investigation","research-question","finding","research-open"}: return bool(profile.get("include_research",True)) and d.get("status") in {"active","open"}
+        if typ == "decision": return bool(profile.get("include_decisions",True)) and d.get("status")=="active"
+        return True
+    seeds=[x for x in search_rows(query) if eligible(x[2])][:8]; scores={d["id"]:s for s,p,d,b in seeds}; seedids=set(scores); rec={d["id"]:(p,d,b) for p,d,b in all_records() if d.get("id")}; edges=graph_rows()
+    for ident,(p,d,b) in rec.items():
+        if ident in seedids or not eligible(d): continue
+        typ=d.get("type")
         bonus=0
         if any(e["source"]=="frontmatter" and ((e["from"]==ident and e["to"] in seedids) or (e["to"]==ident and e["from"] in seedids)) for e in edges): bonus+=25
         if any(e["source"]=="wikilink" and ((e["from"]==ident and e["to"] in seedids) or (e["to"]==ident and e["from"] in seedids)) for e in edges): bonus+=20
