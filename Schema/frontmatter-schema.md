@@ -1,0 +1,2 @@
+# Frontmatter Schema
+Canonical notes use `schema_version: 2`, unique stable `id`, `type`, `title`, and ISO `created`/`updated` dates. The parser accepts only string/integer/boolean/null scalars and flat string lists; nested YAML is forbidden. Wiki notes also use `status`, `confidence`, `sources`, `source_count`, `related`, and `relationships`. Source metadata uses the capitalized source fields in the source template.

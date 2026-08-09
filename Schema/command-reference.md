@@ -1,0 +1,2 @@
+# Command Reference
+`wiki_tool.py`: doctor; build; lint [--strict-evidence]; migrate --check|--apply; source-scan [--update] [--accept-covered]; source-lint; source-delta; source-coverage; source-hash --check|--update-missing|--accept-change PATH; search-catalog --query TEXT; related --id ID; graph-build; context-pack --query TEXT [--profile NAME]; benchmark-retrieval; research-status; research-open; memory-list [--type TYPE] [--status STATUS]; decision-list [--status STATUS]; decision-supersede --old ID --new ID; log --title TITLE --details DETAILS.

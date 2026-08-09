@@ -1,0 +1,2 @@
+# Workflow Examples
+Ingest: hash and scan source, search Wiki, compile focused linked notes with evidence, build/lint/graph, then accept coverage. Research: search, create question/investigation, preserve both sides and unknowns, promote supported knowledge only. Query: search catalog, follow direct relationships, add relevant Research/Decisions and optional Memory, create Context Pack for complex work. Decision: create replacement then run `decision-supersede`.

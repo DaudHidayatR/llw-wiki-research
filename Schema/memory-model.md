@@ -1,0 +1,2 @@
+# Memory Model
+Temporary state stays in working context. Meaningful events may become episodic memory; confirmed/repeated preferences may become preference memory; tentative patterns may become expiring observations. One-offs do not become preferences. Memory is not external evidence and factual memory requires evidence review before Wiki promotion. Choices belong in Decisions. Stale memory may remain clearly marked.
