@@ -498,13 +498,36 @@ def git_repo():
         r=subprocess.run(["git","rev-parse","--show-toplevel"],cwd=ROOT,text=True,capture_output=True)
         return Path(r.stdout.strip()).resolve()==ROOT if r.returncode==0 else False
     except OSError:return False
+def tree_state():
+    out={}
+    for p in ROOT.rglob('*'):
+        if '.git' in p.parts:continue
+        rp=p.relative_to(ROOT).as_posix()
+        if p.is_symlink():out[rp]='symlink:'+os.readlink(p)
+        elif p.is_file():out[rp]=hashlib.sha256(p.read_bytes()).hexdigest()
+    return out
+def backup_tree():
+    parent=Path(tempfile.mkdtemp());backup=parent/'root'
+    shutil.copytree(ROOT,backup,symlinks=True,ignore=lambda p,n:{'.git'} if Path(p).resolve()==ROOT else set())
+    return backup
+def restore_tree(backup):
+    for p in ROOT.iterdir():
+        if p.name=='.git':continue
+        if p.is_symlink() or p.is_file():p.unlink()
+        else:shutil.rmtree(p)
+    shutil.copytree(backup,ROOT,dirs_exist_ok=True,symlinks=True)
 def migration_candidates():
-    out=[]
+    out=[];issues=[]
+    for p in sorted(ROOT.rglob('*')):
+        if any(x in p.parts for x in ('.git','Context','tests')):continue
+        if p.is_symlink():issues.append({'path':p.relative_to(ROOT).as_posix(),'reason':'symlink not allowed during migration'})
     for p in sorted(ROOT.rglob("*.md")):
         rp=p.relative_to(ROOT).as_posix()
-        if any(x in p.parts for x in (".git","Context","tests")) or p.name in INDEX_NAMES:continue
+        if any(x in p.parts for x in (".git","Context","tests")) or p.name in INDEX_NAMES or p.is_symlink():continue
+        try:p.resolve().relative_to(ROOT)
+        except (OSError,ValueError):issues.append({'path':rp,'reason':'path escapes repository'});continue
         try:d,b=parse(p)
-        except (FrontmatterError,OSError):continue
+        except (FrontmatterError,OSError,UnicodeError) as e:issues.append({'path':rp,'reason':f'unparseable Markdown: {e}'});continue
         tags=d.get("tags",[]); inferred=[x for x in tags if x in WIKI_TYPES]
         typ=d.get("type")
         if typ and inferred and inferred!=[typ]:out.append((p,d,b,None,"type conflicts with tags"));continue
@@ -513,7 +536,7 @@ def migration_candidates():
             typ=inferred[0]
         if typ not in WIKI_TYPES:continue
         out.append((p,d,b,typ,None))
-    return out
+    return out,issues
 def migration_defaults(d,typ,rp,used):
     out=dict(d); out["schema_version"]=2; out["type"]=typ
     tags=[x for x in out.get("tags",[]) if x!=typ]
@@ -542,64 +565,64 @@ def migration_plan():
     if cls=="D":
         missing=[]
         for p,d,b in records("Raw/Sources"):
-            if not d.get("ContentHash"):missing.append(rel(p))
+            if d.get("ContentHash")!=body_hash(b):missing.append(rel(p))
         return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":[],"frontmatter_transformations":[],"ambiguous":[],"id_collisions":[],"missing_source_integrity":missing,"safe_to_apply":not missing}
-    candidates=migration_candidates(); used={d.get("id") for p,d,b,t,e in candidates if d.get("id")}
-    transforms=[]; moves=[]; ambiguous=[]; collisions=[]
+    candidates,ambiguous=migration_candidates(); used={d.get("id") for p,d,b,t,e in candidates if d.get("id")}
+    transforms=[]; moves=[]; collisions=[];destinations={}
     generated=set(); valid_existing=set(used)
     for p,d,b,typ,error in candidates:
         rp=p.relative_to(ROOT).as_posix()
         if error:ambiguous.append({"path":rp,"reason":error});continue
         dest=(Path(TYPE_DIRS[typ])/p.name).as_posix()
         if rp!=dest:
-            if (ROOT/dest).exists():ambiguous.append({"path":rp,"reason":f"destination exists: {dest}"});continue
-            moves.append({"from":rp,"to":dest})
+            if os.path.lexists(ROOT/dest):ambiguous.append({"path":rp,"reason":f"destination exists: {dest}"});continue
+            if dest in destinations:ambiguous.append({"path":rp,"reason":f"duplicate destination {dest} also planned from {destinations[dest]}"});continue
+            destinations[dest]=rp;moves.append({"from":rp,"to":dest})
         before=d.get("id"); nd=migration_defaults(d,typ,rp,used)
         if before is None and nd["id"].rsplit("-",1)[-1].isalnum() and len(nd["id"].rsplit("-",1)[-1])==6 and nd["id"].removesuffix("-"+nd["id"].rsplit("-",1)[-1]) in generated|valid_existing:collisions.append({"path":rp,"id":nd["id"]})
         generated.add(nd["id"]); transforms.append({"path":rp,"set":{"schema_version":2,"type":typ,"id":nd["id"]},"remove":["tags"] if "tags" in d and "tags" not in nd else []})
     missing=[]
     for p,d,b in records("Raw/Sources"):
-        if not d.get("ContentHash"):missing.append(rel(p))
-    return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":moves,"frontmatter_transformations":transforms,"ambiguous":ambiguous,"id_collisions":collisions,"missing_source_integrity":missing,"safe_to_apply":cls in {"A","B","C","D"} and not ambiguous}
+        if d.get("ContentHash")!=body_hash(b):missing.append(rel(p))
+    return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":moves,"frontmatter_transformations":transforms,"ambiguous":ambiguous,"id_collisions":collisions,"missing_source_integrity":missing,"safe_to_apply":cls in {"A","B","C","D"} and not ambiguous and not missing}
 def cmd_migrate(a):
-    before={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in ROOT.rglob('*') if p.is_file() and '.git' not in p.parts}; plan=migration_plan(); cls=plan["repository_class"]
+    before=tree_state(); plan=migration_plan(); cls=plan["repository_class"]
     print(json.dumps(plan,indent=2,sort_keys=True))
-    if a.apply:
-        if not plan["safe_to_apply"]: print("migrate: manual action required",file=sys.stderr); return 1
-        has_git=git_repo()
-        if has_git:
-            gs=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True)
-            if gs.returncode or gs.stdout.strip(): print("migrate: refuse dirty Git state",file=sys.stderr); return 1
-            checkpoint="knowledge-os-pre-migrate-"+dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-            tag=subprocess.run(["git","tag",checkpoint],cwd=ROOT,text=True,capture_output=True)
-            if tag.returncode:print("migrate: checkpoint failed: "+tag.stderr.strip(),file=sys.stderr);return 1
+    if not a.apply:
+        if before!=tree_state():print("migrate --check mutated repository",file=sys.stderr);return 1
+        return 0
+    if not plan["safe_to_apply"]:print("migrate: manual action required",file=sys.stderr);return 1
+    has_git=git_repo();checkpoint=None
+    if has_git:
+        gs=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True)
+        if gs.returncode or gs.stdout.strip():print("migrate: refuse dirty Git state",file=sys.stderr);return 1
+        checkpoint="knowledge-os-pre-migrate-"+dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        tag=subprocess.run(["git","tag",checkpoint],cwd=ROOT,text=True,capture_output=True)
+        if tag.returncode:print("migrate: checkpoint failed: "+tag.stderr.strip(),file=sys.stderr);return 1
+    backup=backup_tree()
+    try:
         if cls=="D":
             for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
-            cmd_build(quiet=True); errors=lint_errors(False); print("migrate: already schema 2; validation", "PASS" if not errors else "FAIL"); return 1 if errors else 0
-        candidates={p.relative_to(ROOT).as_posix():(p,d,b,t,e) for p,d,b,t,e in migration_candidates()}
+            cmd_build(quiet=True);errors=lint_errors(False)
+            if errors:restore_tree(backup)
+            print("migrate: already schema 2; validation","PASS" if not errors else "FAIL");return 1 if errors else 0
+        raw_candidates,_=migration_candidates();candidates={p.relative_to(ROOT).as_posix():(p,d,b,t,e) for p,d,b,t,e in raw_candidates}
         used={d.get("id") for p,d,b,t,e in candidates.values() if d.get("id")}
         for item in plan["frontmatter_transformations"]:
-            rp=item["path"];p,d,b,typ,error=candidates[rp];nd=migration_defaults(d,typ,rp,used);move=next((x for x in plan["move"] if x["from"]==rp),None);dest=ROOT/(move["to"] if move else rp);write_note(dest,nd,b)
+            rp=item["path"];p,d,b,typ,error=candidates[rp];nd=migration_defaults(d,typ,rp,used);nd["id"]=item["set"]["id"];move=next((x for x in plan["move"] if x["from"]==rp),None);dest=ROOT/(move["to"] if move else rp);write_note(dest,nd,b)
             if dest.resolve()!=p.resolve():p.unlink()
         for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
         (ROOT/"Schema/version.json").write_text(json.dumps({"knowledge_os_schema":2,"spec_version":"2.1.0"},indent=2)+"\n",encoding="utf-8")
         stop=ROOT/"Schema/search-stopwords.txt"
         if not stop.exists():stop.write_text("a\nan\nand\nthe\n",encoding="utf-8")
         cmd_build(quiet=True)
-        tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True)
-        errors=lint_errors(False)
+        tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True);errors=lint_errors(False)
         if tests.returncode or errors:
-            print(tests.stdout+tests.stderr,file=sys.stderr); print("\n".join(errors),file=sys.stderr)
-            if has_git:
-                reset=subprocess.run(["git","reset","--hard",checkpoint],cwd=ROOT,text=True,capture_output=True)
-                clean=subprocess.run(["git","clean","-fd"],cwd=ROOT,text=True,capture_output=True)
-                if reset.returncode or clean.returncode:print("migrate: rollback failed",file=sys.stderr)
-            return 1
-        print("migrate: apply PASS; build, graph, tests, lint PASS")
-        return 0
-    after={rel(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in ROOT.rglob('*') if p.is_file() and '.git/' not in rel(p)}
-    if before!=after: print("migrate --check mutated repository",file=sys.stderr); return 1
-    return 0
+            print(tests.stdout+tests.stderr,file=sys.stderr);print("\n".join(errors),file=sys.stderr);restore_tree(backup);return 1
+        print("migrate: apply PASS; build, graph, tests, lint PASS");return 0
+    except (OSError,UnicodeError,FrontmatterError,KeyError,ValueError) as e:
+        restore_tree(backup);print(f"migrate: apply failed and rolled back: {e}",file=sys.stderr);return 1
+    finally:shutil.rmtree(backup.parent,ignore_errors=True)
 
 def list_cmd(base,a):
     rows=simple_catalog(base,("type","title","status","importance","subject","scope","updated"))
