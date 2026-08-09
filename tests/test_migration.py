@@ -36,4 +36,16 @@ class MigrationTests(unittest.TestCase):
   v=Path(tempfile.mkdtemp());p=v/'Raw/Sources/evidence.md';p.parent.mkdir(parents=True);p.write_text(fm({'schema_version':2,'id':'source-evidence','type':'source','title':'Evidence','Processed':False},'\n# Evidence\n'));before=pbytes(v);check=run(v,'migrate','--check');plan=json.loads(check.stdout);self.assertFalse(plan['safe_to_apply']);self.assertEqual(plan['missing_source_integrity'],['Raw/Sources/evidence.md']);self.assertNotEqual(run(v,'migrate','--apply').returncode,0);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
  def test_schema_two_stale_source_hash_makes_plan_unsafe(self):
   v=base();source(v,bad=True);run(v,'build');plan=json.loads(run(v,'migrate','--check').stdout);self.assertFalse(plan['safe_to_apply']);self.assertEqual(plan['missing_source_integrity'],['Raw/Sources/evidence.md']);shutil.rmtree(v)
+ def test_check_refuses_directory_symlinks_including_schema_two(self):
+  for relative in ('Wiki','Context','tests','Raw/Sources'):
+   with self.subTest(relative=relative):
+    v=base();outside=Path(tempfile.mkdtemp());target=v/relative;shutil.rmtree(target);target.symlink_to(outside,target_is_directory=True);before=pbytes(v);r=run(v,'migrate','--check');self.assertEqual(r.returncode,0,r.stdout+r.stderr);plan=json.loads(r.stdout);self.assertFalse(plan['safe_to_apply']);self.assertIn(relative,json.dumps(plan['ambiguous']));self.assertNotEqual(run(v,'migrate','--apply').returncode,0);self.assertEqual(before,pbytes(v));self.assertEqual(list(outside.rglob('*')),[]);shutil.rmtree(v);shutil.rmtree(outside)
+ def test_schema_two_reports_malformed_canonical_notes(self):
+  for name,payload in [('bad.md',b'not frontmatter'),('utf8.md',b'\xff\xfe')]:
+   with self.subTest(name=name):
+    v=base();(v/'Wiki/Concepts'/name).write_bytes(payload);r=run(v,'migrate','--check');self.assertEqual(r.returncode,0,r.stdout+r.stderr);plan=json.loads(r.stdout);self.assertFalse(plan['safe_to_apply']);self.assertIn(name,json.dumps(plan['ambiguous']));self.assertNotIn('Traceback',r.stderr);shutil.rmtree(v)
+ def test_apply_rolls_back_unexpected_exception(self):
+  v=Path(tempfile.mkdtemp());p=self.legacy(v);rewrite(p,lambda d:d.update(sources=1));before=pbytes(v);r=run(v,'migrate','--apply');self.assertNotEqual(r.returncode,0);self.assertNotIn('Traceback',r.stdout+r.stderr);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
+ def test_schema_two_apply_runs_tests_and_rolls_back(self):
+  v=base();source(v);wiki(v,sources=['Raw/Sources/evidence.md']);run(v,'build');(v/'tests/test_fail.py').write_text('import unittest\nclass Failure(unittest.TestCase):\n def test_fail(self): self.fail("boom")\n');before=pbytes(v);r=run(v,'migrate','--apply');self.assertNotEqual(r.returncode,0);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
 if __name__=='__main__':unittest.main()

@@ -25,4 +25,14 @@ class SourceTests(unittest.TestCase):
   v=base();source(v);wiki(v,sources=['Raw/Sources/evidence.md'],body='\n# Broken\n\nClaim [C-001]\n');r=run(v,'source-scan','--update','--accept-covered');self.assertNotEqual(r.returncode,0);self.assertIn('lint',r.stdout+r.stderr);self.assertFalse(parse_fixture(v/'Raw/Sources/evidence.md')[0]['Processed']);shutil.rmtree(v)
  def test_accept_change_is_contained_and_requires_an_actual_change(self):
   v=base();source(v);same=run(v,'source-hash','--accept-change','Raw/Sources/evidence.md');self.assertNotEqual(same.returncode,0);escape=run(v,'source-hash','--accept-change','../outside.md');self.assertNotEqual(escape.returncode,0);self.assertNotIn('Traceback',escape.stderr);shutil.rmtree(v)
+ def test_accept_change_is_non_mutating_when_manifest_is_malformed(self):
+  v=base();p=source(v);p.write_text(p.read_text()+'changed\n');(v/'Schema/source-manifest.jsonl').write_text('{bad\n');before=pbytes(v);r=run(v,'source-hash','--accept-change','Raw/Sources/evidence.md');self.assertNotEqual(r.returncode,0);self.assertNotIn('Traceback',r.stdout+r.stderr);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
+ def test_malformed_manifest_source_commands_fail_without_traceback(self):
+  for args in [('source-lint',),('source-delta',),('source-coverage',),('source-scan','--update')]:
+   with self.subTest(args=args):
+    v=base();source(v);(v/'Schema/source-manifest.jsonl').write_text('{bad\n');before=pbytes(v);r=run(v,*args);self.assertNotEqual(r.returncode,0);self.assertIn('invalid repository state',r.stdout+r.stderr);self.assertNotIn('Traceback',r.stdout+r.stderr);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
+ def test_source_commands_reject_symlinked_source_root(self):
+  for args in [('source-hash','--update-missing'),('source-scan','--update'),('source-lint',),('source-delta',),('source-coverage',)]:
+   with self.subTest(args=args):
+    v=base();outside=Path(tempfile.mkdtemp());shutil.rmtree(v/'Raw/Sources');(v/'Raw/Sources').symlink_to(outside,target_is_directory=True);(outside/'evidence.md').write_text('external');before=pbytes(outside);r=run(v,*args);self.assertNotEqual(r.returncode,0);self.assertIn('unsafe source root',r.stdout+r.stderr);self.assertEqual(before,pbytes(outside));shutil.rmtree(v);shutil.rmtree(outside)
 if __name__=='__main__':unittest.main()

@@ -155,6 +155,10 @@ def source_rows(preserve=True):
         rp=rel(p); prev=old.get(rp,{}); current=body_hash(b); fresh=d.get("ContentHash","")==current; available=sorted(coverage.get(rp,[])); processed=bool(d.get("Processed",False)) and fresh
         rows.append({"path":rp,"id":d.get("id",""),"title":d.get("title",""),"content_hash":d.get("ContentHash",""),"current_hash":current,"processed":processed,"covered_by":available if processed else [],"available_coverage":available,"excluded":bool(prev.get("excluded",False)),"updated":str(d.get("Created",d.get("updated","")))})
     return sorted(rows,key=lambda x:x["path"])
+def checked_source_rows():
+    try:return source_rows()
+    except (OSError,UnicodeError,FrontmatterError,json.JSONDecodeError,TypeError,ValueError) as e:
+        print(f"source: invalid repository state: {e}",file=sys.stderr);return None
 
 def catalog_row(p,d):
     keys=("schema_version","id","title","type","topics","aliases","sources","related","relationships","confidence","status","last_verified","review_after","updated")
@@ -206,10 +210,12 @@ def lint_errors(strict=False):
         rp=rel(p)
         try: d,b=parse(p)
         except (FrontmatterError,OSError,UnicodeError) as e: errors.append(f"{rp}: frontmatter: {e}"); continue
-        recs.append((p,d,b)); typ=d.get("type",""); common=REQUIRED if typ=="source" else COMMON_REQUIRED; missing=(common|TYPE_REQUIRED.get(typ,set()))-set(d)
+        typ_raw=d.get("type","");typ=typ_raw if isinstance(typ_raw,str) else "";common=REQUIRED if typ=="source" else COMMON_REQUIRED; missing=(common|TYPE_REQUIRED.get(typ,set()))-set(d)
         if missing: errors.append(f"{rp}: missing fields {sorted(missing)}")
+        if not isinstance(typ_raw,str):errors.append(f"{rp}: invalid type {typ_raw!r}")
         if d.get("schema_version")!=2: errors.append(f"{rp}: schema_version must be 2")
-        ident=d.get("id","")
+        ident_raw=d.get("id","");ident=ident_raw if isinstance(ident_raw,str) else ""
+        recs.append((p,{**d,"type":typ,"id":ident},b))
         if not ID_RE.fullmatch(str(ident)): errors.append(f"{rp}: invalid id {ident!r}")
         if ident in seen: errors.append(f"{rp}: duplicate id {ident} also {seen[ident]}")
         seen[ident]=rp
@@ -221,21 +227,24 @@ def lint_errors(strict=False):
         elif not rp.startswith(expected+"/"): errors.append(f"{rp}: type {typ} belongs under {expected}")
         if not SLUG_RE.fullmatch(p.name): errors.append(f"{rp}: invalid filename slug")
         if typ in TYPE_DIRS and ident and not ident.startswith(typ+"-") and not d.get("migration_legacy_id",False): errors.append(f"{rp}: id must start {typ}-")
-        if "status" in d and d["status"] not in TYPE_STATUS.get(typ,set()): errors.append(f"{rp}: invalid status {d['status']} for {typ}")
-        if "confidence" in d and d["confidence"] not in TYPE_CONFIDENCE.get(typ,set()): errors.append(f"{rp}: invalid confidence {d['confidence']} for {typ}")
+        if "status" in d and (not isinstance(d["status"],str) or d["status"] not in TYPE_STATUS.get(typ,set())): errors.append(f"{rp}: invalid status {d['status']} for {typ}")
+        if "confidence" in d and (not isinstance(d["confidence"],str) or d["confidence"] not in TYPE_CONFIDENCE.get(typ,set())): errors.append(f"{rp}: invalid confidence {d['confidence']} for {typ}")
         for k in DATE_KEYS:
             if k in d and not iso_ok(d[k]): errors.append(f"{rp}: invalid ISO date {k}={d[k]}")
         for k in LIST_KEYS:
             if k in d and not isinstance(d[k],list): errors.append(f"{rp}: {k} must be flat list")
-        src=d.get("sources",[])
+        src=d.get("sources",[]) if isinstance(d.get("sources",[]),list) else []
         if typ in WIKI_TYPES and d.get("source_count") != len(src): errors.append(f"{rp}: source_count mismatch")
         for s in src:
             fp,reason=safe_source_path(s)
             if reason:errors.append(f"{rp}: source {s}: {reason}")
             elif not fp.is_file(): errors.append(f"{rp}: broken/invalid source {s}")
         if typ=="source":
-            if d.get("SourceType") not in SOURCE_TYPES: errors.append(f"{rp}: invalid SourceType")
-        for x in d.get("supersedes",[])+d.get("superseded_by",[]):
+            source_type=d.get("SourceType")
+            if not isinstance(source_type,str) or source_type not in SOURCE_TYPES: errors.append(f"{rp}: invalid SourceType")
+        supersedes=d.get("supersedes",[]) if isinstance(d.get("supersedes",[]),list) else []
+        superseded_by=d.get("superseded_by",[]) if isinstance(d.get("superseded_by",[]),list) else []
+        for x in supersedes+superseded_by:
             if x==ident: errors.append(f"{rp}: self supersession")
         # Evidence ledger
         refs=set(CLAIM_REF_RE.findall(b)); entries={}; sources_by_claim={}; current=None
@@ -272,9 +281,9 @@ def lint_errors(strict=False):
     for p,d,b in recs:
         rp=rel(p)
         for field in ("related","related_wiki","related_research","related_decisions","supersedes","superseded_by"):
-            for target in d.get(field,[]):
+            for target in d.get(field,[]) if isinstance(d.get(field,[]),list) else []:
                 if target not in ids: errors.append(f"{rp}: unresolved {field} id {target}")
-        for r in d.get("relationships",[]):
+        for r in d.get("relationships",[]) if isinstance(d.get("relationships",[]),list) else []:
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*\|[a-z0-9]+(?:-[a-z0-9]+)*",r): errors.append(f"{rp}: bad relationship {r}")
             elif r.split("|",1)[1] not in ids: errors.append(f"{rp}: unresolved relationship target {r}")
     def cyclic(start,graph):
@@ -284,7 +293,7 @@ def lint_errors(strict=False):
             if x==start:return True
             if x not in visited:visited.add(x);todo.extend(graph.get(x,[]))
         return False
-    graphs=[{d.get("id"):d.get(field,[]) for p,d,b in recs} for field in ("supersedes","superseded_by")]
+    graphs=[{d.get("id"):d.get(field,[]) if isinstance(d.get(field,[]),list) else [] for p,d,b in recs} for field in ("supersedes","superseded_by")]
     for ident in sorted(x for x in ids if x and any(cyclic(x,graph) for graph in graphs)):errors.append(f"{seen[ident]}: supersession cycle involving {ident}")
     return errors
 
@@ -293,7 +302,12 @@ def cmd_lint(a):
     if errors: print("lint: FAIL"); print("\n".join("- "+x for x in errors)); return 1
     print(f"lint: PASS ({len(canonical_files())} canonical notes, strict_evidence={a.strict_evidence})"); return 0
 
+def safe_source_root():
+    root=ROOT/"Raw/Sources"
+    if root.is_symlink():print("source: unsafe source root",file=sys.stderr);return False
+    return True
 def hash_action(a):
+    if not safe_source_root():return 1
     changed=[]; bad=[]
     target=Path(a.path) if getattr(a,"path",None) else None
     target_path=None
@@ -306,24 +320,39 @@ def hash_action(a):
         try:parsed.append((p,*parse(p)))
         except (FrontmatterError,OSError,UnicodeError) as e:bad.append(f"{p.relative_to(ROOT).as_posix()}: frontmatter: {e}")
     if bad: print("source-hash: FAIL\n"+"\n".join(bad)); return 1
+    prepared=None
+    if a.mode=="accept-change":
+        try:
+            rows=source_rows(); refs=[rel(x) for x,y,z in all_records() if target.as_posix() in y.get("sources",[])]
+            prepared=(rows,refs)
+        except (OSError,UnicodeError,FrontmatterError,json.JSONDecodeError,TypeError,ValueError) as e:
+            print(f"source-hash: invalid repository state: {e}",file=sys.stderr);return 1
     for p,d,b in parsed:
         rp=rel(p); actual=body_hash(b); stored=d.get("ContentHash","")
         if a.mode=="update-missing" and not stored: d["ContentHash"]=actual; write_note(p,d,b); changed.append(rp)
         elif a.mode=="accept-change" and p.resolve()==target_path.resolve():
             if stored==actual:print("source-hash: target has no content change",file=sys.stderr);return 1
-            d["ContentHash"]=actual; d["Processed"]=False; write_note(p,d,b); changed.append(rp)
-            rows=source_rows();
-            for row in rows:
-                if row["path"]==rp: row["covered_by"]=[]; row["processed"]=False
-            write_jsonl(source_manifest_path(),rows)
-            refs=[rel(x) for x,y,z in all_records() if rp in y.get("sources",[])]; print("review required:",", ".join(refs) or "none")
+            rows,refs=prepared; old_source=p.read_bytes(); manifest=source_manifest_path(); old_manifest=manifest.read_bytes() if manifest.exists() else None
+            try:
+                d["ContentHash"]=actual; d["Processed"]=False; write_note(p,d,b)
+                for row in rows:
+                    if row["path"]==rp: row["content_hash"]=actual;row["current_hash"]=actual;row["covered_by"]=[];row["processed"]=False
+                write_jsonl(manifest,rows);changed.append(rp)
+            except OSError as e:
+                p.write_bytes(old_source)
+                if old_manifest is None:manifest.unlink(missing_ok=True)
+                else:manifest.write_bytes(old_manifest)
+                print(f"source-hash: update failed and rolled back: {e}",file=sys.stderr);return 1
+            print("review required:",", ".join(refs) or "none")
         elif a.mode=="check" and stored!=actual: bad.append(f"{rp}: stored={stored or '<missing>'} actual={actual}")
     if a.mode=="accept-change" and not changed: print("source-hash: target not found",file=sys.stderr); return 1
     if bad: print("source-hash: FAIL\n"+"\n".join(bad)); return 1
     print(f"source-hash: PASS changed={len(changed)} sources={len(parsed)}"); return 0
 
 def cmd_source_scan(a):
-    rows=source_rows()
+    if not safe_source_root():return 1
+    rows=checked_source_rows()
+    if rows is None:return 1
     if a.accept_covered:
         errors=lint_errors(True)
         if errors:print("source-scan: refuse accept-covered because strict lint failed\n"+"\n".join(errors),file=sys.stderr);return 1
@@ -338,22 +367,31 @@ def cmd_source_scan(a):
     print(f"source-scan: sources={len(rows)} changed={sum(r['content_hash']!=r['current_hash'] for r in rows)} accepted={sum(bool(r['covered_by']) for r in rows)} update={a.update}"); return 0
 
 def cmd_source_lint(_):
+    if not safe_source_root():return 1
     bad=[]
     for p in markdown_files("Raw/Sources"):
         try:parse(p)
         except (FrontmatterError,OSError,UnicodeError) as e:bad.append(f"{p.relative_to(ROOT).as_posix()}: frontmatter: {e}")
-    for r in source_rows():
+    rows=checked_source_rows()
+    if rows is None:return 1
+    for r in rows:
         if r["content_hash"]!=r["current_hash"]: bad.append(r["path"]+": hash mismatch")
         if r["processed"] and not (r["covered_by"] or r["excluded"]): bad.append(r["path"]+": processed without accepted coverage/exclusion")
     if bad: print("source-lint: FAIL\n"+"\n".join(bad)); return 1
-    print(f"source-lint: PASS ({len(source_rows())} sources)"); return 0
+    print(f"source-lint: PASS ({len(rows)} sources)"); return 0
 
 def cmd_source_delta(_):
-    rows=source_rows(); delta=[r for r in rows if r["content_hash"]!=r["current_hash"] or r["available_coverage"]!=r["covered_by"]]
+    if not safe_source_root():return 1
+    rows=checked_source_rows()
+    if rows is None:return 1
+    delta=[r for r in rows if r["content_hash"]!=r["current_hash"] or r["available_coverage"]!=r["covered_by"]]
     print("source-delta:",len(delta)); [print(jsonline(r)) for r in delta]; return 0
 
 def cmd_source_coverage(_):
-    rows=source_rows(); uncovered=[r["path"] for r in rows if not r["covered_by"] and not r["excluded"]]
+    if not safe_source_root():return 1
+    rows=checked_source_rows()
+    if rows is None:return 1
+    uncovered=[r["path"] for r in rows if not r["covered_by"] and not r["excluded"]]
     print(f"source-coverage: covered={len(rows)-len(uncovered)}/{len(rows)} uncovered={len(uncovered)}"); [print("- "+x) for x in uncovered]; return 1 if uncovered else 0
 
 def tokenize(s, stop=True):
@@ -516,14 +554,13 @@ def restore_tree(backup):
         if p.is_symlink() or p.is_file():p.unlink()
         else:shutil.rmtree(p)
     shutil.copytree(backup,ROOT,dirs_exist_ok=True,symlinks=True)
+def migration_symlink_issues():
+    return [{'path':p.relative_to(ROOT).as_posix(),'reason':'symlink not allowed during migration'} for p in sorted(ROOT.rglob('*')) if '.git' not in p.parts and p.is_symlink()]
 def migration_candidates():
-    out=[];issues=[]
-    for p in sorted(ROOT.rglob('*')):
-        if any(x in p.parts for x in ('.git','Context','tests')):continue
-        if p.is_symlink():issues.append({'path':p.relative_to(ROOT).as_posix(),'reason':'symlink not allowed during migration'})
+    out=[];issues=migration_symlink_issues()
     for p in sorted(ROOT.rglob("*.md")):
         rp=p.relative_to(ROOT).as_posix()
-        if any(x in p.parts for x in (".git","Context","tests")) or p.name in INDEX_NAMES or p.is_symlink():continue
+        if any(x in p.parts for x in (".git","Context","tests","Schema","_templates",".agents","scripts","site-output")) or p.name in INDEX_NAMES|{"AGENTS.md","Welcome.md"} or p.is_symlink():continue
         try:p.resolve().relative_to(ROOT)
         except (OSError,ValueError):issues.append({'path':rp,'reason':'path escapes repository'});continue
         try:d,b=parse(p)
@@ -563,10 +600,16 @@ def migration_plan():
     for x in ("Schema/version.json","Schema/search-stopwords.txt"):
         if not (ROOT/x).exists():create.append(x)
     if cls=="D":
-        missing=[]
-        for p,d,b in records("Raw/Sources"):
-            if d.get("ContentHash")!=body_hash(b):missing.append(rel(p))
-        return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":[],"frontmatter_transformations":[],"ambiguous":[],"id_collisions":[],"missing_source_integrity":missing,"safe_to_apply":not missing}
+        ambiguous=migration_symlink_issues();parsed=[]
+        for base in CANONICAL_ROOTS:
+            root=ROOT/base
+            if not root.exists() or root.is_symlink():continue
+            for p in sorted(root.rglob('*.md')):
+                if p.name in INDEX_NAMES or p.is_symlink():continue
+                try:parsed.append((p,*parse(p)))
+                except (FrontmatterError,OSError,UnicodeError) as e:ambiguous.append({'path':p.relative_to(ROOT).as_posix(),'reason':f'unparseable canonical Markdown: {e}'})
+        missing=[rel(p) for p,d,b in parsed if d.get('type')=='source' and d.get("ContentHash")!=body_hash(b)]
+        return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":[],"frontmatter_transformations":[],"ambiguous":ambiguous,"id_collisions":[],"missing_source_integrity":missing,"safe_to_apply":not ambiguous and not missing}
     candidates,ambiguous=migration_candidates(); used={d.get("id") for p,d,b,t,e in candidates if d.get("id")}
     transforms=[]; moves=[]; collisions=[];destinations={}
     generated=set(); valid_existing=set(used)
@@ -603,9 +646,10 @@ def cmd_migrate(a):
     try:
         if cls=="D":
             for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
-            cmd_build(quiet=True);errors=lint_errors(False)
-            if errors:restore_tree(backup)
-            print("migrate: already schema 2; validation","PASS" if not errors else "FAIL");return 1 if errors else 0
+            cmd_build(quiet=True);tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True);errors=lint_errors(False)
+            if tests.returncode or errors:
+                print(tests.stdout+tests.stderr,file=sys.stderr);print("\n".join(errors),file=sys.stderr);restore_tree(backup);print("migrate: already schema 2; validation FAIL");return 1
+            print("migrate: already schema 2; validation PASS");return 0
         raw_candidates,_=migration_candidates();candidates={p.relative_to(ROOT).as_posix():(p,d,b,t,e) for p,d,b,t,e in raw_candidates}
         used={d.get("id") for p,d,b,t,e in candidates.values() if d.get("id")}
         for item in plan["frontmatter_transformations"]:
@@ -620,8 +664,10 @@ def cmd_migrate(a):
         if tests.returncode or errors:
             print(tests.stdout+tests.stderr,file=sys.stderr);print("\n".join(errors),file=sys.stderr);restore_tree(backup);return 1
         print("migrate: apply PASS; build, graph, tests, lint PASS");return 0
-    except (OSError,UnicodeError,FrontmatterError,KeyError,ValueError) as e:
-        restore_tree(backup);print(f"migrate: apply failed and rolled back: {e}",file=sys.stderr);return 1
+    except Exception as e:
+        try:restore_tree(backup)
+        except Exception as rollback:print(f"migrate: apply failed ({e}); rollback failed ({rollback})",file=sys.stderr);return 1
+        print(f"migrate: apply failed and rolled back: {e}",file=sys.stderr);return 1
     finally:shutil.rmtree(backup.parent,ignore_errors=True)
 
 def list_cmd(base,a):
@@ -646,17 +692,19 @@ def supersession_cycle(old,new,mapping):
         seen.add(x); todo.extend(mapping.get(x,[]))
     return False
 def cmd_supersede(a):
+    if (ROOT/"Decisions").is_symlink():print("decision-supersede: unsafe decisions root",file=sys.stderr);return 1
     ids={d.get("id"):(p,d,b) for p,d,b in records("Decisions") if d.get("id")}
     if a.old not in ids or a.new not in ids: print("decision-supersede: missing ID",file=sys.stderr); return 1
     op,od,ob=ids[a.old]; np,nd,nb=ids[a.new]
     if od.get("type")!="decision" or nd.get("type")!="decision" or nd.get("status")!="active": print("decision-supersede: both must be decisions and new active",file=sys.stderr); return 1
     dest=ROOT/"Decisions/Superseded"/op.name
-    if dest.exists() and dest.resolve()!=op.resolve(): print("decision-supersede: destination exists",file=sys.stderr); return 1
+    if dest.parent.is_symlink():print("decision-supersede: unsafe destination",file=sys.stderr);return 1
+    if os.path.lexists(dest) and dest.absolute()!=op.absolute(): print("decision-supersede: destination exists",file=sys.stderr); return 1
     mapping={d["id"]:d.get("supersedes",[]) for p,d,b in records("Decisions")}
     if a.old==a.new or supersession_cycle(a.old,a.new,mapping): print("decision-supersede: cycle refused",file=sys.stderr); return 1
     od["status"]="superseded"; od["superseded_by"]=sorted(set(od.get("superseded_by",[])+[a.new])); nd["supersedes"]=sorted(set(nd.get("supersedes",[])+[a.old])); today=dt.date.today().isoformat(); od["updated"]=today; nd["updated"]=today
     dest=ROOT/"Decisions/Superseded"/op.name
-    if dest.exists() and dest.resolve()!=op.resolve():print("decision-supersede: destination exists",file=sys.stderr);return 1
+    if os.path.lexists(dest) and dest.absolute()!=op.absolute():print("decision-supersede: destination exists",file=sys.stderr);return 1
     write_note(np,nd,nb); write_note(dest,od,ob)
     if dest.resolve()!=op.resolve(): op.unlink()
     print(f"decision-supersede: {a.old} -> {a.new}; moved {rel(dest)}; body preserved"); return 0
