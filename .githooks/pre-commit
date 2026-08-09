@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+python3 -m unittest discover -s tests
+python3 scripts/wiki_tool.py build
+python3 scripts/wiki_tool.py lint --strict-evidence
+python3 scripts/wiki_tool.py source-lint
+python3 scripts/wiki_tool.py graph-build
+python3 scripts/export_public.py
+python3 scripts/audit_public.py
