@@ -11,7 +11,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 
-# Finding Note
+# Finding
 
 ## Finding
 

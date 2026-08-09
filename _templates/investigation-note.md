@@ -13,7 +13,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 
-# Investigation Note
+# Investigation Title
 
 ## Research Question
 

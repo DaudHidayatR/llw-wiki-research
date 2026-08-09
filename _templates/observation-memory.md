@@ -6,12 +6,12 @@ title: ""
 status: "tentative"
 confidence: "low"
 subject: ""
-expires: ""
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
+expires: ""
 ---
 
-# Observation Memory
+# Observation
 
 ## Observation
 

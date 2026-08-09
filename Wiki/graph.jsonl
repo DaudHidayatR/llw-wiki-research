@@ -15,7 +15,7 @@
 {"from":"log-2026-08-09-first-knowledge-os-ingest","relation":"links-to","source":"wikilink","to":"topic-knowledge-operating-systems"}
 {"from":"log-2026-08-09-first-knowledge-os-ingest","relation":"supported-by","source":"sources","to":"Raw/Sources/knowledge-os-starter-demo.md"}
 {"from":"research-open-corroboration-thresholds","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
-{"from":"research-open-corroboration-thresholds","relation":"links-to","source":"wikilink","to":"research-question-durable-knowledge-promotion"}
+{"from":"research-open-corroboration-thresholds","relation":"links-to","source":"wikilink","to":"investigation-durable-knowledge-promotion"}
 {"from":"research-question-durable-knowledge-promotion","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"synthesis-knowledge-os-architecture","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"synthesis-knowledge-os-architecture","relation":"links-to","source":"wikilink","to":"source-knowledge-os-starter-demo"}

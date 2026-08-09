@@ -12,7 +12,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 
-# Preference Memory
+# Preference
 
 ## Preference
 

@@ -1,2 +1,28 @@
-# Relationship Model
-Explicit relationships are flat strings `<lowercase-kebab-relation>|<stable-target-id>`. Semantic edges come only from these declarations. Graph generation may derive `links-to` from wikilinks and `supported-by` from source paths; it must never infer hidden semantic relations. Targets resolve repository-wide.
+# Relationship Contract
+
+Canonical explicit relationships use a flat string list:
+
+```yaml
+relationships:
+  - "requires|concept-container-isolation"
+  - "contrasts-with|concept-host-execution"
+  - "implemented-by|entity-gvisor"
+```
+
+Grammar:
+
+```text
+<relation>|<target-id>
+```
+
+Allowed relation names use lowercase kebab-case.
+
+`graph-build` may additionally derive:
+
+- `links-to` from wikilinks
+- `supported-by` from `sources`
+- `shares-source-with` as a derived edge only when explicitly requested in output mode
+
+`graph-build` must never infer hidden semantic relations.
+
+---

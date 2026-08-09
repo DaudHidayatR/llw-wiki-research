@@ -14,8 +14,20 @@ CONFIDENCE = {"low","medium","high","mixed","confirmed"}
 SOURCE_TYPES = {"markdown","web","pdf","book","video","audio","code","repository","documentation","meeting","dataset","note","other"}
 DATE_KEYS = {"created","updated","last_verified","review_after","Captured","Created","Published","expires"}
 REQUIRED = {"schema_version","id","type","title"}
+COMMON_REQUIRED = REQUIRED|{"created","updated"}
+TYPE_REQUIRED = {
+ "source":{"Author","Reference","SourceType","ContentType","Published","Captured","Created","ContentHash","Processed","tags"},
+ **{x:{"topics","aliases","status","confidence","sources","source_count","related","relationships","supersedes","superseded_by","last_verified","review_after"} for x in WIKI_TYPES if x!="log"},
+ "log":{"status","topics","sources","source_count"},"research-question":{"status","priority","related_wiki"},
+ "investigation":{"status","question","confidence","sources","related_wiki","related_decisions"},"finding":{"status","confidence","sources","related_wiki"},
+ "episodic-memory":{"status","importance","subject","expires"},"preference-memory":{"status","confidence","subject","supersedes","superseded_by"},
+ "observation-memory":{"status","confidence","subject","expires"},"decision":{"status","scope","supersedes","superseded_by","related_wiki","related_research"},
+ "context-profile":{"name","max_items","include_memory","include_decisions","include_research","include_raw"}}
+TYPE_STATUS={**{x:{"seed","active","mature","needs-review","deprecated"} for x in WIKI_TYPES},"research-question":{"open","closed"},"investigation":{"active","closed"},"finding":{"candidate","mature","deprecated"},"research-open":{"open","closed"},"episodic-memory":{"active","deprecated"},"preference-memory":{"active","superseded","deprecated"},"observation-memory":{"tentative","confirmed","deprecated"},"decision":{"active","superseded"}}
+TYPE_CONFIDENCE={**{x:{"low","medium","high","mixed"} for x in WIKI_TYPES},"investigation":{"low","medium","high","mixed"},"finding":{"low","medium","high","mixed"},"preference-memory":CONFIDENCE,"observation-memory":CONFIDENCE}
 LIST_KEYS = {"topics","aliases","sources","related","relationships","supersedes","superseded_by","related_wiki","related_research","related_decisions","ContentType","tags"}
 INDEX_NAMES = {"index.md"}
+STRUCTURE = tuple(TYPE_DIRS.values())+("Raw/Files","Decisions/Superseded","Context/Packs","Schema","_templates",".agents/skills","scripts","tests","tests/fixtures")
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 CLAIM_REF_RE = re.compile(r"\[(C-\d{3})\]")
@@ -95,7 +107,7 @@ def body_hash(body): return "sha256:"+hashlib.sha256(body.replace("\r\n","\n").r
 def markdown_files(base):
     p=ROOT/base
     if not p.exists(): return []
-    return sorted(x for x in p.rglob("*.md") if x.name not in INDEX_NAMES and not x.name.startswith("."))
+    return sorted(x for x in p.rglob("*.md") if x.name not in INDEX_NAMES and not x.name.startswith(".") and not x.is_symlink())
 def canonical_files():
     out=[]
     for base in CANONICAL_ROOTS: out.extend(markdown_files(base))
@@ -104,7 +116,7 @@ def records(base):
     out=[]
     for p in markdown_files(base):
         try: d,b=parse(p); out.append((p,d,b))
-        except FrontmatterError: continue
+        except (FrontmatterError,OSError,UnicodeError): continue
     return out
 
 def all_records(): return [(p,*parse(p)) for p in canonical_files()]
@@ -113,6 +125,17 @@ def iso_ok(v):
     if v in {"",None}: return True
     try: dt.date.fromisoformat(str(v)); return True
     except ValueError: return False
+def safe_source_path(value):
+    if not isinstance(value,str) or not value.startswith("Raw/Sources/") or Path(value).is_absolute():return None,"must be under Raw/Sources"
+    target=ROOT/value
+    cur=ROOT
+    for part in Path(value).parts:
+        cur=cur/part
+        if cur.is_symlink():return None,"symlink not allowed"
+    try:
+        target.resolve().relative_to((ROOT/"Raw/Sources").resolve())
+    except (OSError,ValueError):return None,"escapes repository"
+    return target,None
 
 def source_refs(body): return sorted(set(m.group(1) for m in re.finditer(r"\[\[(Raw/Sources/[^\]#]+\.md)(?:#[^\]]+)?\]\]",body)))
 def source_manifest_path(): return ROOT/"Schema/source-manifest.jsonl"
@@ -124,13 +147,13 @@ def write_jsonl(path,rows): path.parent.mkdir(parents=True,exist_ok=True); path.
 def source_rows(preserve=True):
     old={x["path"]:x for x in load_jsonl(source_manifest_path())} if preserve else {}
     coverage={}
-    for p,d,b in all_records():
+    for p,d,b in records("Wiki"):
         if d.get("type") in WIKI_TYPES:
             for s in d.get("sources",[]): coverage.setdefault(s,[]).append(d.get("id"))
     rows=[]
     for p,d,b in records("Raw/Sources"):
-        rp=rel(p); prev=old.get(rp,{})
-        rows.append({"path":rp,"id":d.get("id",""),"title":d.get("title",""),"content_hash":d.get("ContentHash",""),"current_hash":body_hash(b),"processed":bool(d.get("Processed",False)),"covered_by":sorted(prev.get("covered_by",[])),"available_coverage":sorted(coverage.get(rp,[])),"excluded":bool(prev.get("excluded",False)),"updated":str(d.get("Created",d.get("updated","")))})
+        rp=rel(p); prev=old.get(rp,{}); current=body_hash(b); fresh=d.get("ContentHash","")==current; available=sorted(coverage.get(rp,[])); processed=bool(d.get("Processed",False)) and fresh
+        rows.append({"path":rp,"id":d.get("id",""),"title":d.get("title",""),"content_hash":d.get("ContentHash",""),"current_hash":current,"processed":processed,"covered_by":available if processed else [],"available_coverage":available,"excluded":bool(prev.get("excluded",False)),"updated":str(d.get("Created",d.get("updated","")))})
     return sorted(rows,key=lambda x:x["path"])
 
 def catalog_row(p,d):
@@ -145,7 +168,8 @@ def simple_catalog(base,keys):
     return sorted(rows,key=lambda x:x["path"])
 
 def graph_rows():
-    recs=all_records(); ids={d.get("id") for _,d,_ in recs}; stem_ids={p.stem:d.get("id") for p,d,_ in recs}
+    recs=all_records(); ids={d.get("id") for _,d,_ in recs}; path_ids={p.relative_to(ROOT).with_suffix('').as_posix():d.get("id") for p,d,_ in recs}; stems={}
+    for p,d,b in recs:stems.setdefault(p.stem,[]).append(d.get("id"))
     edges=set()
     for p,d,b in recs:
         src=d.get("id");
@@ -155,7 +179,7 @@ def graph_rows():
                 relation,target=r.split("|",1); edges.add((src,relation,target,"frontmatter"))
         for s in d.get("sources",[]): edges.add((src,"supported-by",s,"sources"))
         for link in WIKILINK_RE.findall(b):
-            target=stem_ids.get(Path(link).stem)
+            clean=Path(link).with_suffix('').as_posix().lstrip('./'); choices=stems.get(Path(clean).stem,[]); target=path_ids.get(clean) if '/' in clean else choices[0] if len(choices)==1 else None
             if target and target!=src: edges.add((src,"links-to",target,"wikilink"))
     return [{"from":a,"relation":b,"to":c,"source":d} for a,b,c,d in sorted(edges)]
 
@@ -181,11 +205,11 @@ def lint_errors(strict=False):
     for p in canonical_files():
         rp=rel(p)
         try: d,b=parse(p)
-        except FrontmatterError as e: errors.append(f"{rp}: frontmatter: {e}"); continue
-        recs.append((p,d,b)); missing=REQUIRED-set(d)
+        except (FrontmatterError,OSError,UnicodeError) as e: errors.append(f"{rp}: frontmatter: {e}"); continue
+        recs.append((p,d,b)); typ=d.get("type",""); common=REQUIRED if typ=="source" else COMMON_REQUIRED; missing=(common|TYPE_REQUIRED.get(typ,set()))-set(d)
         if missing: errors.append(f"{rp}: missing fields {sorted(missing)}")
         if d.get("schema_version")!=2: errors.append(f"{rp}: schema_version must be 2")
-        ident=d.get("id",""); typ=d.get("type","")
+        ident=d.get("id","")
         if not ID_RE.fullmatch(str(ident)): errors.append(f"{rp}: invalid id {ident!r}")
         if ident in seen: errors.append(f"{rp}: duplicate id {ident} also {seen[ident]}")
         seen[ident]=rp
@@ -195,19 +219,20 @@ def lint_errors(strict=False):
             status=d.get("status"); allowed="Decisions/Superseded" if status=="superseded" else "Decisions/Active"
             if not rp.startswith(allowed+"/"): errors.append(f"{rp}: decision status/location mismatch")
         elif not rp.startswith(expected+"/"): errors.append(f"{rp}: type {typ} belongs under {expected}")
-        if typ!="source" and typ!="context-profile" and not SLUG_RE.fullmatch(p.name): errors.append(f"{rp}: invalid filename slug")
-        if typ in WIKI_TYPES and ident and not ident.startswith(typ+"-"): errors.append(f"{rp}: id must start {typ}-")
-        if "status" in d and d["status"] not in STATUS: errors.append(f"{rp}: invalid status {d['status']}")
-        if "confidence" in d and d["confidence"] not in CONFIDENCE: errors.append(f"{rp}: invalid confidence {d['confidence']}")
+        if not SLUG_RE.fullmatch(p.name): errors.append(f"{rp}: invalid filename slug")
+        if typ in TYPE_DIRS and ident and not ident.startswith(typ+"-") and not d.get("migration_legacy_id",False): errors.append(f"{rp}: id must start {typ}-")
+        if "status" in d and d["status"] not in TYPE_STATUS.get(typ,set()): errors.append(f"{rp}: invalid status {d['status']} for {typ}")
+        if "confidence" in d and d["confidence"] not in TYPE_CONFIDENCE.get(typ,set()): errors.append(f"{rp}: invalid confidence {d['confidence']} for {typ}")
         for k in DATE_KEYS:
             if k in d and not iso_ok(d[k]): errors.append(f"{rp}: invalid ISO date {k}={d[k]}")
         for k in LIST_KEYS:
             if k in d and not isinstance(d[k],list): errors.append(f"{rp}: {k} must be flat list")
-        if typ in WIKI_TYPES:
-            src=d.get("sources",[])
-            if d.get("source_count") != len(src): errors.append(f"{rp}: source_count mismatch")
-            for s in src:
-                if not s.startswith("Raw/Sources/") or not (ROOT/s).is_file(): errors.append(f"{rp}: broken/invalid source {s}")
+        src=d.get("sources",[])
+        if typ in WIKI_TYPES and d.get("source_count") != len(src): errors.append(f"{rp}: source_count mismatch")
+        for s in src:
+            fp,reason=safe_source_path(s)
+            if reason:errors.append(f"{rp}: source {s}: {reason}")
+            elif not fp.is_file(): errors.append(f"{rp}: broken/invalid source {s}")
         if typ=="source":
             if d.get("SourceType") not in SOURCE_TYPES: errors.append(f"{rp}: invalid SourceType")
         for x in d.get("supersedes",[])+d.get("superseded_by",[]):
@@ -219,6 +244,7 @@ def lint_errors(strict=False):
             if line=="## Evidence Ledger": in_ledger=True; continue
             if in_ledger and line.startswith("## "): in_ledger=False
             if not in_ledger: continue
+            if line and (line.startswith("- C-") or line.startswith("  - source:")) and not (LEDGER_RE.match(line) or SOURCE_LEDGER_RE.match(line)):errors.append(f"{rp}: malformed evidence ledger: {line}")
             m=LEDGER_RE.match(line)
             if m:
                 current=m.group(1)
@@ -228,8 +254,9 @@ def lint_errors(strict=False):
             if m:
                 if not current: errors.append(f"{rp}: evidence source without claim"); continue
                 sp,anchor=m.groups(); sources_by_claim[current]+=1
-                fp=ROOT/sp
-                if not fp.is_file(): errors.append(f"{rp}: missing ledger source {sp}")
+                fp,reason=safe_source_path(sp)
+                if reason: errors.append(f"{rp}: ledger source {sp}: {reason}")
+                elif not fp.is_file(): errors.append(f"{rp}: missing ledger source {sp}")
                 elif anchor:
                     try: sb=parse(fp)[1]
                     except FrontmatterError: sb=""
@@ -244,11 +271,21 @@ def lint_errors(strict=False):
     ids=set(seen)
     for p,d,b in recs:
         rp=rel(p)
-        for target in d.get("related",[]):
-            if target not in ids: errors.append(f"{rp}: unresolved related id {target}")
+        for field in ("related","related_wiki","related_research","related_decisions","supersedes","superseded_by"):
+            for target in d.get(field,[]):
+                if target not in ids: errors.append(f"{rp}: unresolved {field} id {target}")
         for r in d.get("relationships",[]):
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*\|[a-z0-9]+(?:-[a-z0-9]+)*",r): errors.append(f"{rp}: bad relationship {r}")
             elif r.split("|",1)[1] not in ids: errors.append(f"{rp}: unresolved relationship target {r}")
+    def cyclic(start,graph):
+        todo=list(graph.get(start,[])); visited=set()
+        while todo:
+            x=todo.pop()
+            if x==start:return True
+            if x not in visited:visited.add(x);todo.extend(graph.get(x,[]))
+        return False
+    graphs=[{d.get("id"):d.get(field,[]) for p,d,b in recs} for field in ("supersedes","superseded_by")]
+    for ident in sorted(x for x in ids if x and any(cyclic(x,graph) for graph in graphs)):errors.append(f"{seen[ident]}: supersession cycle involving {ident}")
     return errors
 
 def cmd_lint(a):
@@ -259,10 +296,21 @@ def cmd_lint(a):
 def hash_action(a):
     changed=[]; bad=[]
     target=Path(a.path) if getattr(a,"path",None) else None
-    for p,d,b in records("Raw/Sources"):
+    target_path=None
+    if a.mode=="accept-change":
+        if not target or target.is_absolute():print("source-hash: invalid target",file=sys.stderr);return 1
+        target_path,reason=safe_source_path(target.as_posix())
+        if reason or not target_path.is_file():print("source-hash: invalid target: "+(reason or "not found"),file=sys.stderr);return 1
+    parsed=[]
+    for p in markdown_files("Raw/Sources"):
+        try:parsed.append((p,*parse(p)))
+        except (FrontmatterError,OSError,UnicodeError) as e:bad.append(f"{p.relative_to(ROOT).as_posix()}: frontmatter: {e}")
+    if bad: print("source-hash: FAIL\n"+"\n".join(bad)); return 1
+    for p,d,b in parsed:
         rp=rel(p); actual=body_hash(b); stored=d.get("ContentHash","")
         if a.mode=="update-missing" and not stored: d["ContentHash"]=actual; write_note(p,d,b); changed.append(rp)
-        elif a.mode=="accept-change" and target and (p.resolve()==(ROOT/target).resolve() or rp==target.as_posix()):
+        elif a.mode=="accept-change" and p.resolve()==target_path.resolve():
+            if stored==actual:print("source-hash: target has no content change",file=sys.stderr);return 1
             d["ContentHash"]=actual; d["Processed"]=False; write_note(p,d,b); changed.append(rp)
             rows=source_rows();
             for row in rows:
@@ -272,11 +320,15 @@ def hash_action(a):
         elif a.mode=="check" and stored!=actual: bad.append(f"{rp}: stored={stored or '<missing>'} actual={actual}")
     if a.mode=="accept-change" and not changed: print("source-hash: target not found",file=sys.stderr); return 1
     if bad: print("source-hash: FAIL\n"+"\n".join(bad)); return 1
-    print(f"source-hash: PASS changed={len(changed)} sources={len(records('Raw/Sources'))}"); return 0
+    print(f"source-hash: PASS changed={len(changed)} sources={len(parsed)}"); return 0
 
 def cmd_source_scan(a):
     rows=source_rows()
     if a.accept_covered:
+        errors=lint_errors(True)
+        if errors:print("source-scan: refuse accept-covered because strict lint failed\n"+"\n".join(errors),file=sys.stderr);return 1
+        stale=[r["path"] for r in rows if r["content_hash"]!=r["current_hash"]]
+        if stale:print("source-scan: refuse accept-covered for changed sources: "+", ".join(stale),file=sys.stderr);return 1
         for r in rows:
             r["covered_by"]=r["available_coverage"]
             if r["covered_by"]:
@@ -287,6 +339,9 @@ def cmd_source_scan(a):
 
 def cmd_source_lint(_):
     bad=[]
+    for p in markdown_files("Raw/Sources"):
+        try:parse(p)
+        except (FrontmatterError,OSError,UnicodeError) as e:bad.append(f"{p.relative_to(ROOT).as_posix()}: frontmatter: {e}")
     for r in source_rows():
         if r["content_hash"]!=r["current_hash"]: bad.append(r["path"]+": hash mismatch")
         if r["processed"] and not (r["covered_by"] or r["excluded"]): bad.append(r["path"]+": processed without accepted coverage/exclusion")
@@ -299,7 +354,7 @@ def cmd_source_delta(_):
 
 def cmd_source_coverage(_):
     rows=source_rows(); uncovered=[r["path"] for r in rows if not r["covered_by"] and not r["excluded"]]
-    print(f"source-coverage: covered={len(rows)-len(uncovered)}/{len(rows)} uncovered={len(uncovered)}"); [print("- "+x) for x in uncovered]; return 1 if any(r["processed"] for r in rows if r["path"] in uncovered) else 0
+    print(f"source-coverage: covered={len(rows)-len(uncovered)}/{len(rows)} uncovered={len(uncovered)}"); [print("- "+x) for x in uncovered]; return 1 if uncovered else 0
 
 def tokenize(s, stop=True):
     toks=[]; cur=""
@@ -309,10 +364,13 @@ def tokenize(s, stop=True):
     if cur:toks.append(cur)
     stops=set((ROOT/"Schema/search-stopwords.txt").read_text().split()) if stop and (ROOT/"Schema/search-stopwords.txt").exists() else set()
     return [x for x in toks if x not in stops]
-def normalized(s): return " ".join(tokenize(s,False))
-def search_rows(query):
+def normalized(s): return " ".join(tokenize(s))
+def updated_key(d):
+    value=str(d.get("updated","")).replace("-","")
+    return -int(value) if value.isdigit() else 1
+def score_rows(query,recs,priority):
     q=set(tokenize(query)); full=normalized(query); rows=[]
-    for p,d,b in records("Wiki"):
+    for p,d,b in recs:
         title=str(d.get("title","")); aliases=d.get("aliases",[]); topics=d.get("topics",[]); score=0
         if normalized(title)==full: score+=100
         if any(normalized(x)==full for x in aliases): score+=90
@@ -321,9 +379,10 @@ def search_rows(query):
         score+=min(30,10*len({t for t in q if any(t in tokenize(x) for x in topics)}))
         score+=min(25,5*len(q&set(tokenize(b))))
         if score: rows.append((score,p,d,b))
-    priority={t:i for i,t in enumerate(("synthesis","comparison","concept","topic","entity","project"))}
-    rows.sort(key=lambda x:(-x[0],priority.get(x[2].get("type"),99),-(int(str(x[2].get("updated","")).replace('-','') or 0)),rel(x[1])))
+    order={t:i for i,t in enumerate(priority)}
+    rows.sort(key=lambda x:(-x[0],order.get(x[2].get("type"),99),updated_key(x[2]),rel(x[1])))
     return rows
+def search_rows(query):return score_rows(query,records("Wiki"),("synthesis","comparison","concept","topic","entity","project"))
 
 def expanded(query,profile):
     def eligible(d):
@@ -333,7 +392,12 @@ def expanded(query,profile):
         if typ in {"investigation","research-question","finding","research-open"}: return bool(profile.get("include_research",True)) and d.get("status") in {"active","open"}
         if typ == "decision": return bool(profile.get("include_decisions",True)) and d.get("status")=="active"
         return True
-    seeds=[x for x in search_rows(query) if eligible(x[2])][:8]; scores={d["id"]:s for s,p,d,b in seeds}; seedids=set(scores); rec={d["id"]:(p,d,b) for p,d,b in all_records() if d.get("id")}; edges=graph_rows()
+    priority=profile.get("type_priority",["synthesis","comparison","concept","topic","entity","project","investigation","research-question","finding","decision","episodic-memory","preference-memory","observation-memory"])
+    candidates=[x for x in all_records() if eligible(x[1])]
+    direct=score_rows(query,candidates,priority)
+    if not direct and profile.get("include_raw") in {True,"always","fallback"}:direct=score_rows(query,records("Raw/Sources"),priority)
+    elif profile.get("include_raw") in {True,"always"}:direct+=score_rows(query,records("Raw/Sources"),priority);direct=score_rows(query,[(p,d,b) for s,p,d,b in direct],priority)
+    seeds=direct[:8]; scores={d["id"]:s for s,p,d,b in seeds}; seedids=set(scores); rec={d["id"]:(p,d,b) for p,d,b in all_records() if d.get("id")}; edges=graph_rows()
     for ident,(p,d,b) in rec.items():
         if ident in seedids or not eligible(d): continue
         typ=d.get("type")
@@ -347,9 +411,9 @@ def expanded(query,profile):
         if typ=="decision" and profile.get("include_decisions",True) and seedids&set(d.get("related_wiki",[])): bonus+=15
         if typ.endswith("memory") and profile.get("include_memory",False) and seedids&set(d.get("related_wiki",[])): bonus+=10
         if bonus:scores[ident]=bonus
-    priority={t:i for i,t in enumerate(profile.get("type_priority",["synthesis","comparison","concept","topic","entity","project","investigation","research-question","finding","decision","episodic-memory","preference-memory","observation-memory"]))}
+    priority={t:i for i,t in enumerate(priority)}
     items=[(score,*rec[i]) for i,score in scores.items() if i in rec]
-    items.sort(key=lambda x:(-x[0],priority.get(x[2].get("type"),99),-(int(str(x[2].get("updated","")).replace('-','') or 0)),rel(x[1])))
+    items.sort(key=lambda x:(-x[0],priority.get(x[2].get("type"),99),updated_key(x[2]),rel(x[1])))
     return items[:int(profile.get("max_items",20))]
 
 def load_profile(name):
@@ -386,23 +450,38 @@ def cmd_benchmark(_):
     cases=load_jsonl(ROOT/"Schema/retrieval-benchmark.jsonl"); r5=r10=rr=zero=count=0
     for c in cases:
         ids=[d["id"] for s,p,d,b in context_items(c["query"],c.get("profile","default-research"))]; count+=len(ids); exp=c["expected_ids"]
-        hit5=any(x in ids[:5] for x in exp); hit10=any(x in ids[:10] for x in exp); r5+=hit5; r10+=hit10
+        hit5=sum(x in ids[:5] for x in exp)/len(exp) if exp else 1; hit10=sum(x in ids[:10] for x in exp)/len(exp) if exp else 1; r5+=hit5; r10+=hit10
         ranks=[ids.index(x)+1 for x in exp if x in ids[:10]]; rr+=1/min(ranks) if ranks else 0; zero+=not ids
     n=len(cases) or 1; metrics={"cases":len(cases),"Recall@5":r5/n,"Recall@10":r10/n,"MRR@10":rr/n,"zero_hit_count":zero,"zero_hit_rate":zero/n,"average_selected_items":count/n}
     print(json.dumps(metrics,indent=2,sort_keys=True)); ok=metrics["Recall@10"]>=.85 and metrics["MRR@10"]>=.65 and metrics["zero_hit_rate"]<=.1
     print("benchmark-retrieval:","PASS" if ok else "FAIL"); return 0 if ok else 1
 
 def cmd_doctor(_):
-    needed=["Raw/Sources","Wiki/Topics","Research/Questions","Memory/Episodic","Decisions/Active","Context/Profiles","Schema/version.json","tests"]
-    missing=[x for x in needed if not (ROOT/x).exists()]; dup=len([d.get('id') for p,d,b in all_records()])-len(set(d.get('id') for p,d,b in all_records())); stale=sum(r['content_hash']!=r['current_hash'] for r in source_rows()); due=[]
-    today=dt.date.today()
-    for p,d,b in all_records():
-        if d.get("review_after") and iso_ok(d["review_after"]) and dt.date.fromisoformat(d["review_after"])<today: due.append(rel(p))
-    try: git=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True); gs="dirty" if git.stdout.strip() else "clean"
+    needed=[*STRUCTURE,"Schema/version.json"]
+    catalogs=["Schema/source-manifest.jsonl","Wiki/catalog.jsonl","Wiki/graph.jsonl","Wiki/index.md",*[folder+"/index.md" for folder in WIKI_TYPES.values()],"Research/catalog.jsonl","Research/index.md","Memory/catalog.jsonl","Memory/index.md","Decisions/catalog.jsonl","Decisions/index.md"]
+    missing=[x for x in needed if not (ROOT/x).exists()]; missing_catalogs=[x for x in catalogs if not (ROOT/x).exists()]; malformed=[]; recs=[]
+    for p in canonical_files():
+        try:recs.append((p,*parse(p)))
+        except (FrontmatterError,OSError,UnicodeError) as e:malformed.append(f"{p.relative_to(ROOT).as_posix()}: {e}")
+    for relative in catalogs:
+        path=ROOT/relative
+        if path.exists() and path.suffix==".jsonl":
+            try:load_jsonl(path)
+            except (OSError,UnicodeError,json.JSONDecodeError,TypeError,ValueError) as e:malformed.append(f"{relative}: {e}")
+    idents=[d.get("id") for p,d,b in recs if d.get("id")]; dup=len(idents)-len(set(idents)); stale=0; due=[]
+    for p,d,b in recs:
+        if d.get("type")=="source" and d.get("ContentHash")!=body_hash(b):stale+=1
+        if d.get("review_after") and iso_ok(d["review_after"]) and dt.date.fromisoformat(str(d["review_after"]))<dt.date.today():due.append(p)
+    try: git=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True); gs="unavailable" if git.returncode else "dirty" if git.stdout.strip() else "clean"
     except OSError: gs="unavailable"
-    migration=not (ROOT/"Schema/version.json").exists() or json.loads((ROOT/"Schema/version.json").read_text()).get("knowledge_os_schema")!=2
-    print(f"doctor: python={sys.version.split()[0]} git={gs} canonical_notes={len(canonical_files())} duplicate_ids={dup} stale_hashes={stale} review_due={len(due)} migration_required={migration} missing={len(missing)} catalogs={'present' if (ROOT/'Wiki/catalog.jsonl').exists() else 'missing'} tests={'present' if (ROOT/'tests').exists() else 'missing'}")
-    return 1 if missing or dup or stale or migration else 0
+    try:migration=json.loads((ROOT/"Schema/version.json").read_text()).get("knowledge_os_schema")!=2
+    except (OSError,json.JSONDecodeError,AttributeError):migration=True;malformed.append("Schema/version.json")
+    fixtures=ROOT/"tests/fixtures"; fixture_payloads=fixtures.exists() and any(p.is_file() and p.name!=".gitkeep" for p in fixtures.rglob("*"))
+    print(f"doctor: python={sys.version.split()[0]} git={gs} canonical_notes={len(recs)} duplicate_ids={dup} stale_hashes={stale} review_due={len(due)} migration_required={migration} missing={len(missing)} missing_catalogs={len(missing_catalogs)} tests={'present' if (ROOT/'tests').exists() else 'missing'} fixture_payloads={'present' if fixture_payloads else 'missing'} malformed={len(malformed)}")
+    for x in missing:print("- missing: "+x)
+    for x in missing_catalogs:print("- missing catalog: "+x)
+    for x in malformed:print("- malformed: "+x)
+    return 1 if missing or missing_catalogs or dup or stale or migration or malformed or not fixture_payloads else 0
 
 def classify():
     if not any(ROOT.iterdir()): return "A"
@@ -414,17 +493,110 @@ def classify():
     if (ROOT/"Wiki").exists() or (ROOT/"Raw").exists(): return "C"
     if (ROOT/".obsidian").exists() or list(ROOT.glob("*.md")): return "B"
     return "E"
-def cmd_migrate(a):
-    before={rel(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in ROOT.rglob('*') if p.is_file() and '.git/' not in rel(p)}; cls=classify(); version=2 if cls=="D" else None
-    plan={"repository_class":cls,"schema_version":version,"create":[],"move":[],"frontmatter_transformations":[],"ambiguous":[],"id_collisions":[],"missing_source_integrity":[],"safe_to_apply":cls in {"A","B","C","D"}}
+def git_repo():
+    try:
+        r=subprocess.run(["git","rev-parse","--show-toplevel"],cwd=ROOT,text=True,capture_output=True)
+        return Path(r.stdout.strip()).resolve()==ROOT if r.returncode==0 else False
+    except OSError:return False
+def migration_candidates():
+    out=[]
+    for p in sorted(ROOT.rglob("*.md")):
+        rp=p.relative_to(ROOT).as_posix()
+        if any(x in p.parts for x in (".git","Context","tests")) or p.name in INDEX_NAMES:continue
+        try:d,b=parse(p)
+        except (FrontmatterError,OSError):continue
+        tags=d.get("tags",[]); inferred=[x for x in tags if x in WIKI_TYPES]
+        typ=d.get("type")
+        if typ and inferred and inferred!=[typ]:out.append((p,d,b,None,"type conflicts with tags"));continue
+        if not typ:
+            if len(inferred)!=1:out.append((p,d,b,None,"requires exactly one compiled-note type tag"));continue
+            typ=inferred[0]
+        if typ not in WIKI_TYPES:continue
+        out.append((p,d,b,typ,None))
+    return out
+def migration_defaults(d,typ,rp,used):
+    out=dict(d); out["schema_version"]=2; out["type"]=typ
+    tags=[x for x in out.get("tags",[]) if x!=typ]
+    if tags:out["tags"]=tags
+    else:out.pop("tags",None)
+    ident=out.get("id")
+    if ident and ID_RE.fullmatch(str(ident)):
+        if not str(ident).startswith(typ+"-"):out["migration_legacy_id"]=True
+    else:
+        base=typ+"-"+(slugify(out.get("title","")) or slugify(Path(rp).stem) or "note")
+        ident=base if base not in used else base+"-"+hashlib.sha256(f"{typ}\n{rp}".encode()).hexdigest()[:6]
+        while ident in used:ident=base+"-"+hashlib.sha256(f"{typ}\n{rp}\n{ident}".encode()).hexdigest()[:6]
+        out["id"]=ident
+    today=dt.date.today().isoformat(); out.setdefault("created",today); out.setdefault("updated",today)
+    defaults={"topics":[],"aliases":[],"status":"seed","confidence":"medium","sources":[],"source_count":0,"related":[],"relationships":[],"supersedes":[],"superseded_by":[],"last_verified":"","review_after":""}
+    for k,v in defaults.items():out.setdefault(k,v)
+    used.add(out["id"]); return out
+def migration_plan():
+    cls=classify(); version=None; v=ROOT/"Schema/version.json"
+    if v.exists():
+        try:version=json.loads(v.read_text()).get("knowledge_os_schema")
+        except (OSError,json.JSONDecodeError):pass
+    create=[x for x in STRUCTURE if not (ROOT/x).exists()]
+    for x in ("Schema/version.json","Schema/search-stopwords.txt"):
+        if not (ROOT/x).exists():create.append(x)
+    if cls=="D":
+        missing=[]
+        for p,d,b in records("Raw/Sources"):
+            if not d.get("ContentHash"):missing.append(rel(p))
+        return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":[],"frontmatter_transformations":[],"ambiguous":[],"id_collisions":[],"missing_source_integrity":missing,"safe_to_apply":not missing}
+    candidates=migration_candidates(); used={d.get("id") for p,d,b,t,e in candidates if d.get("id")}
+    transforms=[]; moves=[]; ambiguous=[]; collisions=[]
+    generated=set(); valid_existing=set(used)
+    for p,d,b,typ,error in candidates:
+        rp=p.relative_to(ROOT).as_posix()
+        if error:ambiguous.append({"path":rp,"reason":error});continue
+        dest=(Path(TYPE_DIRS[typ])/p.name).as_posix()
+        if rp!=dest:
+            if (ROOT/dest).exists():ambiguous.append({"path":rp,"reason":f"destination exists: {dest}"});continue
+            moves.append({"from":rp,"to":dest})
+        before=d.get("id"); nd=migration_defaults(d,typ,rp,used)
+        if before is None and nd["id"].rsplit("-",1)[-1].isalnum() and len(nd["id"].rsplit("-",1)[-1])==6 and nd["id"].removesuffix("-"+nd["id"].rsplit("-",1)[-1]) in generated|valid_existing:collisions.append({"path":rp,"id":nd["id"]})
+        generated.add(nd["id"]); transforms.append({"path":rp,"set":{"schema_version":2,"type":typ,"id":nd["id"]},"remove":["tags"] if "tags" in d and "tags" not in nd else []})
+    missing=[]
     for p,d,b in records("Raw/Sources"):
-        if not d.get("ContentHash"): plan["missing_source_integrity"].append(rel(p))
+        if not d.get("ContentHash"):missing.append(rel(p))
+    return {"repository_class":cls,"schema_version":version,"create":sorted(create),"move":moves,"frontmatter_transformations":transforms,"ambiguous":ambiguous,"id_collisions":collisions,"missing_source_integrity":missing,"safe_to_apply":cls in {"A","B","C","D"} and not ambiguous}
+def cmd_migrate(a):
+    before={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in ROOT.rglob('*') if p.is_file() and '.git' not in p.parts}; plan=migration_plan(); cls=plan["repository_class"]
     print(json.dumps(plan,indent=2,sort_keys=True))
     if a.apply:
-        if cls=="E": return 1
-        gs=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True)
-        if gs.returncode==0 and gs.stdout.strip(): print("migrate: refuse dirty Git state",file=sys.stderr); return 1
-        if cls=="D": cmd_build(quiet=True); errors=lint_errors(False); print("migrate: already schema 2; validation", "PASS" if not errors else "FAIL"); return 1 if errors else 0
+        if not plan["safe_to_apply"]: print("migrate: manual action required",file=sys.stderr); return 1
+        has_git=git_repo()
+        if has_git:
+            gs=subprocess.run(["git","status","--porcelain"],cwd=ROOT,text=True,capture_output=True)
+            if gs.returncode or gs.stdout.strip(): print("migrate: refuse dirty Git state",file=sys.stderr); return 1
+            checkpoint="knowledge-os-pre-migrate-"+dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+            tag=subprocess.run(["git","tag",checkpoint],cwd=ROOT,text=True,capture_output=True)
+            if tag.returncode:print("migrate: checkpoint failed: "+tag.stderr.strip(),file=sys.stderr);return 1
+        if cls=="D":
+            for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
+            cmd_build(quiet=True); errors=lint_errors(False); print("migrate: already schema 2; validation", "PASS" if not errors else "FAIL"); return 1 if errors else 0
+        candidates={p.relative_to(ROOT).as_posix():(p,d,b,t,e) for p,d,b,t,e in migration_candidates()}
+        used={d.get("id") for p,d,b,t,e in candidates.values() if d.get("id")}
+        for item in plan["frontmatter_transformations"]:
+            rp=item["path"];p,d,b,typ,error=candidates[rp];nd=migration_defaults(d,typ,rp,used);move=next((x for x in plan["move"] if x["from"]==rp),None);dest=ROOT/(move["to"] if move else rp);write_note(dest,nd,b)
+            if dest.resolve()!=p.resolve():p.unlink()
+        for folder in STRUCTURE:(ROOT/folder).mkdir(parents=True,exist_ok=True)
+        (ROOT/"Schema/version.json").write_text(json.dumps({"knowledge_os_schema":2,"spec_version":"2.1.0"},indent=2)+"\n",encoding="utf-8")
+        stop=ROOT/"Schema/search-stopwords.txt"
+        if not stop.exists():stop.write_text("a\nan\nand\nthe\n",encoding="utf-8")
+        cmd_build(quiet=True)
+        tests=subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,text=True,capture_output=True)
+        errors=lint_errors(False)
+        if tests.returncode or errors:
+            print(tests.stdout+tests.stderr,file=sys.stderr); print("\n".join(errors),file=sys.stderr)
+            if has_git:
+                reset=subprocess.run(["git","reset","--hard",checkpoint],cwd=ROOT,text=True,capture_output=True)
+                clean=subprocess.run(["git","clean","-fd"],cwd=ROOT,text=True,capture_output=True)
+                if reset.returncode or clean.returncode:print("migrate: rollback failed",file=sys.stderr)
+            return 1
+        print("migrate: apply PASS; build, graph, tests, lint PASS")
+        return 0
     after={rel(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in ROOT.rglob('*') if p.is_file() and '.git/' not in rel(p)}
     if before!=after: print("migrate --check mutated repository",file=sys.stderr); return 1
     return 0
@@ -451,19 +623,25 @@ def supersession_cycle(old,new,mapping):
         seen.add(x); todo.extend(mapping.get(x,[]))
     return False
 def cmd_supersede(a):
-    ids=idmap()
+    ids={d.get("id"):(p,d,b) for p,d,b in records("Decisions") if d.get("id")}
     if a.old not in ids or a.new not in ids: print("decision-supersede: missing ID",file=sys.stderr); return 1
     op,od,ob=ids[a.old]; np,nd,nb=ids[a.new]
     if od.get("type")!="decision" or nd.get("type")!="decision" or nd.get("status")!="active": print("decision-supersede: both must be decisions and new active",file=sys.stderr); return 1
+    dest=ROOT/"Decisions/Superseded"/op.name
+    if dest.exists() and dest.resolve()!=op.resolve(): print("decision-supersede: destination exists",file=sys.stderr); return 1
     mapping={d["id"]:d.get("supersedes",[]) for p,d,b in records("Decisions")}
     if a.old==a.new or supersession_cycle(a.old,a.new,mapping): print("decision-supersede: cycle refused",file=sys.stderr); return 1
     od["status"]="superseded"; od["superseded_by"]=sorted(set(od.get("superseded_by",[])+[a.new])); nd["supersedes"]=sorted(set(nd.get("supersedes",[])+[a.old])); today=dt.date.today().isoformat(); od["updated"]=today; nd["updated"]=today
-    dest=ROOT/"Decisions/Superseded"/op.name; write_note(np,nd,nb); write_note(dest,od,ob)
+    dest=ROOT/"Decisions/Superseded"/op.name
+    if dest.exists() and dest.resolve()!=op.resolve():print("decision-supersede: destination exists",file=sys.stderr);return 1
+    write_note(np,nd,nb); write_note(dest,od,ob)
     if dest.resolve()!=op.resolve(): op.unlink()
     print(f"decision-supersede: {a.old} -> {a.new}; moved {rel(dest)}; body preserved"); return 0
 
 def cmd_log(a):
-    today=dt.date.today().isoformat(); slug=slugify(a.title); p=ROOT/"Wiki/Logs"/f"{today}-{slug}.md"; ident=f"log-{today}-{slug}"
+    today=dt.date.today().isoformat(); slug=slugify(a.title)
+    if not slug:print("log: empty slug",file=sys.stderr);return 1
+    p=ROOT/"Wiki/Logs"/f"{today}-{slug}.md"; ident=f"log-{today}-{slug}"
     d={"schema_version":2,"id":ident,"type":"log","title":a.title,"status":"active","topics":[],"sources":[],"source_count":0,"created":today,"updated":today}; b=f"\n# {a.title}\n\n## Summary\n\n{a.details}\n\n## Changes\n\n## Why It Changed\n\n## Affected Knowledge\n\n## Related Research\n\n## Related Decisions\n\n## Sources\n"
     if p.exists(): print("log: exists",file=sys.stderr); return 1
     write_note(p,d,b); print("log:",rel(p)); return 0
