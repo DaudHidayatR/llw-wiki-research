@@ -60,4 +60,6 @@ class MigrationTests(unittest.TestCase):
   for field,value in [('type',['concept']),('tags',1),('title',['Legacy'])]:
    with self.subTest(field=field):
     v=Path(tempfile.mkdtemp());p=self.legacy(v);rewrite(p,lambda d:d.update({field:value}));r=run(v,'migrate','--check');self.assertEqual(r.returncode,0,r.stdout+r.stderr);plan=json.loads(r.stdout);self.assertFalse(plan['safe_to_apply']);self.assertIn(field,json.dumps(plan['ambiguous']));self.assertNotIn('Traceback',r.stderr);shutil.rmtree(v)
+ def test_explicit_symlinked_wiki_root_is_refused(self):
+  v=base();link=v.parent/(v.name+'-link');link.symlink_to(v,target_is_directory=True);before=pbytes(v);r=run(link,'migrate','--check');self.assertNotEqual(r.returncode,0);self.assertIn('unsafe WIKI_ROOT',r.stdout+r.stderr);self.assertEqual(before,pbytes(v));link.unlink();shutil.rmtree(v)
 if __name__=='__main__':unittest.main()

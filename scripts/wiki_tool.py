@@ -4,7 +4,10 @@ from __future__ import annotations
 import argparse, datetime as dt, hashlib, json, os, re, shutil, subprocess, sys, tarfile, tempfile, unicodedata
 from pathlib import Path
 
-ROOT = Path(os.environ.get("WIKI_ROOT", Path(__file__).resolve().parents[1])).resolve()
+_ROOT_ARG = Path(os.environ.get("WIKI_ROOT", Path(__file__).resolve().parents[1])).absolute()
+if _ROOT_ARG.is_symlink():
+    print("unsafe WIKI_ROOT: symlinked root", file=sys.stderr); raise SystemExit(1)
+ROOT = _ROOT_ARG.resolve()
 SCHEMA = 2
 CANONICAL_ROOTS = ("Raw/Sources", "Wiki", "Research", "Memory", "Decisions", "Context/Profiles")
 WIKI_TYPES = {"topic":"Wiki/Topics", "concept":"Wiki/Concepts", "entity":"Wiki/Entities", "project":"Wiki/Projects", "comparison":"Wiki/Comparisons", "synthesis":"Wiki/Synthesis", "log":"Wiki/Logs"}
@@ -124,7 +127,8 @@ def records(base):
 def all_records(): return [(p,*parse(p)) for p in canonical_files()]
 def idmap(): return {d.get("id"):(p,d,b) for p,d,b in all_records() if d.get("id")}
 def iso_ok(v):
-    if v in {"",None}: return True
+    if v is None or v == "": return True
+    if not isinstance(v, (str,int,float)): return False
     try: dt.date.fromisoformat(str(v)); return True
     except ValueError: return False
 def safe_source_path(value):
@@ -143,7 +147,13 @@ def source_refs(body): return sorted(set(m.group(1) for m in re.finditer(r"\[\[(
 def source_manifest_path(): return ROOT/"Schema/source-manifest.jsonl"
 def load_jsonl(path):
     if not path.exists(): return []
-    return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    rows=[json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    if path.name == "retrieval-benchmark.jsonl":
+        if not all(isinstance(x,dict) and isinstance(x.get("query"),str) and isinstance(x.get("expected_ids"),list) for x in rows): raise ValueError("benchmark rows malformed")
+        return rows
+    if path.name == "source-manifest.jsonl" and not all(isinstance(x,dict) and isinstance(x.get("path"),str) for x in rows):
+        raise ValueError("manifest rows must be objects with string path")
+    return rows
 def write_jsonl(path,rows):
     if not safe_repository_target(path):raise OSError(f"unsafe repository target: {path}")
     path.parent.mkdir(parents=True,exist_ok=True); path.write_text("".join(jsonline(x)+"\n" for x in rows),encoding="utf-8",newline="\n")
@@ -205,8 +215,10 @@ def make_index(title,rows):
     return "\n".join(lines)+"\n"
 
 def cmd_build(_=None,quiet=False):
+    checked=checked_source_rows()
+    if checked is None: return 1
     wiki=sorted([catalog_row(p,d) for p,d,b in records("Wiki")],key=lambda x:x["path"])
-    write_jsonl(ROOT/"Wiki/catalog.jsonl",wiki); write_jsonl(ROOT/"Wiki/graph.jsonl",graph_rows()); write_jsonl(source_manifest_path(),source_rows())
+    write_jsonl(ROOT/"Wiki/catalog.jsonl",wiki); write_jsonl(ROOT/"Wiki/graph.jsonl",graph_rows()); write_jsonl(source_manifest_path(),checked)
     (ROOT/"Wiki/index.md").write_text(make_index("Wiki Index",wiki),encoding="utf-8")
     for typ,folder in WIKI_TYPES.items():
         rs=[r for r in wiki if r["type"]==typ]; (ROOT/folder/"index.md").write_text(make_index(typ.title()+" Index",rs),encoding="utf-8")
@@ -320,6 +332,8 @@ def safe_source_root():
     return True
 def hash_action(a):
     if not safe_source_root():return 1
+    try: load_jsonl(source_manifest_path())
+    except (OSError,UnicodeError,json.JSONDecodeError,TypeError,ValueError) as e: print(f"source-hash: invalid repository state: {e}",file=sys.stderr); return 1
     changed=[]; bad=[]
     target=Path(a.path) if getattr(a,"path",None) else None
     target_path=None
@@ -744,6 +758,7 @@ def cmd_supersede(a):
     if dest.parent.is_symlink():print("decision-supersede: unsafe destination",file=sys.stderr);return 1
     if os.path.lexists(dest) and dest.absolute()!=op.absolute(): print("decision-supersede: destination exists",file=sys.stderr); return 1
     mapping={d["id"]:d.get("supersedes",[]) for p,d,b in records("Decisions")}
+    if any(not isinstance(v,list) for v in mapping.values()): print("decision-supersede: invalid supersession metadata",file=sys.stderr); return 1
     if a.old==a.new or supersession_cycle(a.old,a.new,mapping): print("decision-supersede: cycle refused",file=sys.stderr); return 1
     od["status"]="superseded"; od["superseded_by"]=sorted(set(od.get("superseded_by",[])+[a.new])); nd["supersedes"]=sorted(set(nd.get("supersedes",[])+[a.old])); today=dt.date.today().isoformat(); od["updated"]=today; nd["updated"]=today
     dest=ROOT/"Decisions/Superseded"/op.name

@@ -42,4 +42,9 @@ class SourceTests(unittest.TestCase):
     if direct:manifest.symlink_to(outside/'manifest.jsonl')
     else:shutil.rmtree(v/'Schema');(v/'Schema').symlink_to(outside,target_is_directory=True)
     r=run(v,'source-scan','--update');self.assertNotEqual(r.returncode,0);self.assertIn('unsafe repository target',r.stdout+r.stderr);self.assertEqual(list(outside.iterdir()),[]);shutil.rmtree(v);shutil.rmtree(outside)
+ def test_malformed_manifest_rows_fail_all_source_commands(self):
+  for payload in ('{}\n','[]\n','{"path":1}\n'):
+   for args in [('source-hash','--check'),('source-hash','--update-missing'),('source-lint',),('source-delta',),('source-coverage',),('source-scan','--update')]:
+    with self.subTest(payload=payload,args=args):
+     v=base();source(v);(v/'Schema/source-manifest.jsonl').write_text(payload);before=pbytes(v);r=run(v,*args);self.assertNotEqual(r.returncode,0);self.assertIn('invalid repository state',r.stdout+r.stderr);self.assertNotIn('Traceback',r.stdout+r.stderr);self.assertEqual(before,pbytes(v));shutil.rmtree(v)
 if __name__=='__main__':unittest.main()

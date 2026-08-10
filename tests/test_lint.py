@@ -45,4 +45,6 @@ class LintTests(unittest.TestCase):
   v=base();source(v);p=wiki(v,sources=['Raw/Sources/evidence.md']);rewrite(p,lambda d:d.update(type=['concept'],id=['concept-x'],sources=1,relationships=1,supersedes=1));r=run(v,'lint');self.assertNotEqual(r.returncode,0);self.assertIn('invalid type',r.stdout+r.stderr);self.assertNotIn('Traceback',r.stdout+r.stderr);shutil.rmtree(v)
  def test_list_valued_source_type_is_reported_without_traceback(self):
   v=base();p=source(v);rewrite(p,lambda d:d.update(SourceType=['web']));r=run(v,'lint');self.assertNotEqual(r.returncode,0);self.assertIn('SourceType',r.stdout+r.stderr);self.assertNotIn('Traceback',r.stdout+r.stderr);shutil.rmtree(v)
+ def test_list_valued_date_is_reported_without_traceback(self):
+  v=base();source(v);p=wiki(v);rewrite(p,lambda d:d.update(created=['2026-08-09']));r=run(v,'lint');self.assertNotEqual(r.returncode,0);self.assertIn('invalid ISO date',r.stdout+r.stderr);self.assertNotIn('Traceback',r.stdout+r.stderr);shutil.rmtree(v)
 if __name__=='__main__':unittest.main()
