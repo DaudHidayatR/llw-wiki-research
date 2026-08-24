@@ -106,6 +106,7 @@ sandbox path — re-derivable from the job).
 - [[hermes/wiki/comparisons/deep-research-gap-analysis]] — coverage vs missing (repo-verified + P2 gaps)
 - [[hermes/wiki/synthesis/flux-tailscale-redesign]] — consolidated synthesis
 - [[hermes/wiki/synthesis/phase2-openbao-scanner-cli]] — Phase-2: OpenBao HCL+mappings, host-driven reconcile, root-token revoke, Trivy+gitleaks gate, Bash retained
+- [[hermes/wiki/synthesis/phase345-istio-kyverno-recovery-ci-config]] — Phases 3–5: Istio remove/upgrade, Kyverno PSA+audit-enforce, OpenBao Raft runbook, CI validation-only, config dedup, SHA/digest pinning
 
 ## Evidence Ledger
 
