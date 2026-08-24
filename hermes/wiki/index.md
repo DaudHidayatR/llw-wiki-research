@@ -103,6 +103,7 @@ sandbox path — re-derivable from the job).
 - [[hermes/wiki/concepts/tailnet-lock-rebuilds]] — Tailnet Lock + ephemeral kind rebuilds
 - [[hermes/wiki/concepts/flux-gitops-graph]] — Flux 4-layer graph, bootstrap ownership, branch vs semver
 - [[hermes/wiki/concepts/openbao-http-behind-tls]] — OpenBao plain-HTTP behind Tailscale TLS
+- [[hermes/wiki/comparisons/deep-research-gap-analysis]] — coverage vs missing (repo-verified + P2 gaps)
 - [[hermes/wiki/synthesis/flux-tailscale-redesign]] — consolidated synthesis
 
 ## Evidence Ledger
