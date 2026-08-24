@@ -105,6 +105,7 @@ sandbox path — re-derivable from the job).
 - [[hermes/wiki/concepts/openbao-http-behind-tls]] — OpenBao plain-HTTP behind Tailscale TLS
 - [[hermes/wiki/comparisons/deep-research-gap-analysis]] — coverage vs missing (repo-verified + P2 gaps)
 - [[hermes/wiki/synthesis/flux-tailscale-redesign]] — consolidated synthesis
+- [[hermes/wiki/synthesis/phase2-openbao-scanner-cli]] — Phase-2: OpenBao HCL+mappings, host-driven reconcile, root-token revoke, Trivy+gitleaks gate, Bash retained
 
 ## Evidence Ledger
 
