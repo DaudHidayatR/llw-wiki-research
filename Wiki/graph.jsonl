@@ -150,6 +150,12 @@
 {"from":"synthesis-phase6b-snapshot-and-cni-research","relation":"links-to","source":"wikilink","to":"source-deep-research-openbao-snapshot-automation"}
 {"from":"synthesis-phase6b-snapshot-and-cni-research","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-kind-cni.md"}
 {"from":"synthesis-phase6b-snapshot-and-cni-research","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-openbao-snapshot-automation.md"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"extends","source":"frontmatter","to":"synthesis-phase6-verification-findings"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"extends","source":"frontmatter","to":"synthesis-phase6b-snapshot-and-cni-research"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"links-to","source":"wikilink","to":"project-homelab-devsecops"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"links-to","source":"wikilink","to":"research-open-live-cluster-verification"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"links-to","source":"wikilink","to":"source-supply-chain-pin-matrix-2026-08-26"}
+{"from":"synthesis-phase6c-supply-chain-pins-and-gap-triage","relation":"supported-by","source":"sources","to":"Raw/Sources/source-supply-chain-pin-matrix-2026-08-26.md"}
 {"from":"topic-knowledge-operating-systems","relation":"contains","source":"frontmatter","to":"concept-knowledge-separation"}
 {"from":"topic-knowledge-operating-systems","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"topic-knowledge-operating-systems","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}

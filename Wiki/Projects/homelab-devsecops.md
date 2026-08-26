@@ -36,6 +36,7 @@ related:
   - "synthesis-phase345-istio-kyverno-recovery-ci-config"
   - "synthesis-phase6-verification-findings"
   - "synthesis-phase6b-snapshot-and-cni-research"
+  - "synthesis-phase6c-supply-chain-pins-and-gap-triage"
   - "concept-kind-networkpolicy-enforcement"
   - "research-question-openbao-snapshot-automation"
 relationships:

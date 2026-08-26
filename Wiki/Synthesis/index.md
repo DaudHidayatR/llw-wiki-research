@@ -8,3 +8,4 @@
 - [[Wiki/Synthesis/phase345-istio-kyverno-recovery-ci-config|Phases 3–5 Synthesis — Istio, Kyverno, OpenBao Recovery, CI, config, Pinning]] — `synthesis` (`synthesis-phase345-istio-kyverno-recovery-ci-config`)
 - [[Wiki/Synthesis/phase6-verification-findings|Phase 6 Verification — Gap-Closing Findings]] — `synthesis` (`synthesis-phase6-verification-findings`)
 - [[Wiki/Synthesis/phase6b-snapshot-and-cni-research|Phase 6b Research — OpenBao Snapshot Automation + kind CNI Choice]] — `synthesis` (`synthesis-phase6b-snapshot-and-cni-research`)
+- [[Wiki/Synthesis/phase6c-supply-chain-pins-and-gap-triage|Phase 6c — Supply-Chain Pins + Remaining-Gap Triage]] — `synthesis` (`synthesis-phase6c-supply-chain-pins-and-gap-triage`)
