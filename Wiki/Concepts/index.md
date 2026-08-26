@@ -4,6 +4,7 @@
 
 - [[Wiki/Concepts/flux-gitops-graph|Flux GitOps — 4-Layer Graph, Bootstrap Ownership, Branch vs Semver]] — `concept` (`concept-flux-gitops-graph`)
 - [[Wiki/Concepts/istio-assessment|Istio Assessment for the Homelab]] — `concept` (`concept-istio-assessment`)
+- [[Wiki/Concepts/kind-networkpolicy-enforcement|NetworkPolicy Enforcement in kind — kindnetd Does Not Enforce]] — `concept` (`concept-kind-networkpolicy-enforcement`)
 - [[Wiki/Concepts/knowledge-separation|Knowledge Separation]] — `concept` (`concept-knowledge-separation`)
 - [[Wiki/Concepts/kyverno-enforcement|Kyverno Enforcement, PSA, and Conftest Ownership Split]] — `concept` (`concept-kyverno-enforcement`)
 - [[Wiki/Concepts/openbao-http-behind-tls|OpenBao Plain-HTTP Behind Tailscale L7 TLS Termination]] — `concept` (`concept-openbao-http-behind-tls`)

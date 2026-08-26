@@ -4,6 +4,9 @@
 {"from":"concept-istio-assessment","relation":"contrasts-with","source":"frontmatter","to":"concept-tailscale-l7-ingress"}
 {"from":"concept-istio-assessment","relation":"links-to","source":"wikilink","to":"source-deep-research-policy-kyverno-istio"}
 {"from":"concept-istio-assessment","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-policy-kyverno-istio.md"}
+{"from":"concept-kind-networkpolicy-enforcement","relation":"links-to","source":"wikilink","to":"source-deep-research-phase6-verification"}
+{"from":"concept-kind-networkpolicy-enforcement","relation":"related-to","source":"frontmatter","to":"concept-kyverno-enforcement"}
+{"from":"concept-kind-networkpolicy-enforcement","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-phase6-verification.md"}
 {"from":"concept-knowledge-separation","relation":"links-to","source":"wikilink","to":"source-knowledge-os-starter-demo"}
 {"from":"concept-knowledge-separation","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}
 {"from":"concept-knowledge-separation","relation":"links-to","source":"wikilink","to":"topic-knowledge-operating-systems"}
@@ -67,7 +70,12 @@
 {"from":"project-homelab-devsecops","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-tailscale-operator.md"}
 {"from":"research-open-corroboration-thresholds","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"research-open-corroboration-thresholds","relation":"links-to","source":"wikilink","to":"investigation-durable-knowledge-promotion"}
+{"from":"research-open-live-cluster-verification","relation":"links-to","source":"wikilink","to":"concept-openbao-raft-recovery"}
+{"from":"research-open-live-cluster-verification","relation":"links-to","source":"wikilink","to":"concept-tailscale-l7-ingress"}
+{"from":"research-open-live-cluster-verification","relation":"links-to","source":"wikilink","to":"synthesis-phase6-verification-findings"}
 {"from":"research-question-durable-knowledge-promotion","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
+{"from":"research-question-openbao-snapshot-automation","relation":"links-to","source":"wikilink","to":"concept-openbao-raft-recovery"}
+{"from":"research-question-openbao-snapshot-automation","relation":"links-to","source":"wikilink","to":"source-deep-research-phase6-verification"}
 {"from":"synthesis-flux-tailscale-redesign","relation":"links-to","source":"wikilink","to":"concept-flux-gitops-graph"}
 {"from":"synthesis-flux-tailscale-redesign","relation":"links-to","source":"wikilink","to":"concept-openbao-http-behind-tls"}
 {"from":"synthesis-flux-tailscale-redesign","relation":"links-to","source":"wikilink","to":"concept-tailnet-lock-rebuilds"}
@@ -119,6 +127,14 @@
 {"from":"synthesis-phase345-istio-kyverno-recovery-ci-config","relation":"synthesizes","source":"frontmatter","to":"concept-istio-assessment"}
 {"from":"synthesis-phase345-istio-kyverno-recovery-ci-config","relation":"synthesizes","source":"frontmatter","to":"concept-kyverno-enforcement"}
 {"from":"synthesis-phase345-istio-kyverno-recovery-ci-config","relation":"synthesizes","source":"frontmatter","to":"concept-openbao-raft-recovery"}
+{"from":"synthesis-phase6-verification-findings","relation":"extends","source":"frontmatter","to":"concept-flux-gitops-graph"}
+{"from":"synthesis-phase6-verification-findings","relation":"extends","source":"frontmatter","to":"concept-istio-assessment"}
+{"from":"synthesis-phase6-verification-findings","relation":"extends","source":"frontmatter","to":"concept-kyverno-enforcement"}
+{"from":"synthesis-phase6-verification-findings","relation":"extends","source":"frontmatter","to":"concept-openbao-raft-recovery"}
+{"from":"synthesis-phase6-verification-findings","relation":"links-to","source":"wikilink","to":"project-homelab-devsecops"}
+{"from":"synthesis-phase6-verification-findings","relation":"links-to","source":"wikilink","to":"source-deep-research-phase6-verification"}
+{"from":"synthesis-phase6-verification-findings","relation":"links-to","source":"wikilink","to":"synthesis-phase345-istio-kyverno-recovery-ci-config"}
+{"from":"synthesis-phase6-verification-findings","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-phase6-verification.md"}
 {"from":"topic-knowledge-operating-systems","relation":"contains","source":"frontmatter","to":"concept-knowledge-separation"}
 {"from":"topic-knowledge-operating-systems","relation":"links-to","source":"wikilink","to":"concept-knowledge-separation"}
 {"from":"topic-knowledge-operating-systems","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}

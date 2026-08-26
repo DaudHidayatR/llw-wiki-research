@@ -34,6 +34,9 @@ related:
   - "synthesis-flux-tailscale-redesign"
   - "synthesis-phase2-openbao-scanner-cli"
   - "synthesis-phase345-istio-kyverno-recovery-ci-config"
+  - "synthesis-phase6-verification-findings"
+  - "concept-kind-networkpolicy-enforcement"
+  - "research-question-openbao-snapshot-automation"
 relationships:
   - "has-concept|concept-tailscale-operator-helm"
   - "has-concept|concept-tailscale-l7-ingress"
