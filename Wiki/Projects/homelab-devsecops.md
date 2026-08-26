@@ -35,6 +35,7 @@ related:
   - "synthesis-phase2-openbao-scanner-cli"
   - "synthesis-phase345-istio-kyverno-recovery-ci-config"
   - "synthesis-phase6-verification-findings"
+  - "synthesis-phase6b-snapshot-and-cni-research"
   - "concept-kind-networkpolicy-enforcement"
   - "research-question-openbao-snapshot-automation"
 relationships:
