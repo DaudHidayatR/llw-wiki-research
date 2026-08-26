@@ -13,7 +13,8 @@ confidence: "high"
 sources:
   - "Raw/Sources/deep-research-openbao-snapshot-automation.md"
   - "Raw/Sources/deep-research-kind-cni.md"
-source_count: 2
+  - "Raw/Sources/source-calico-kind-helm-primary.md"
+source_count: 3
 related:
   - "project-homelab-devsecops"
   - "concept-openbao-raft-recovery"
@@ -53,9 +54,12 @@ RTO. Single-node Raft is DR, not availability. [C-001]
 **kind CNI**: kindnetd does not enforce NetworkPolicy (Phase-6 confirmed). For real
 enforcement, default is **minimal Cilium** (`disableDefaultCNI: true`, bootstrap CNI
 directly then hand to Flux, operator 1 replica, kube-proxy retained, Hubble/encryption
-off, pinned chart); Calico suits conventional networking/learning goals but its branch
-timed out (verify docs.tigera.io). Verification is a data-plane test (two Pods, TCP
-positive control → deny-all → fail both directions → recover), never ping/schema.
+off, pinned chart); Calico (OSS 3.32.1) suits conventional networking/learning goals —
+kind install via `disableDefaultCNI: true` + `podSubnet: 192.168.0.0/16`, then
+manifest (projectcalico/calico v3.32.1) or Helm (projectcalico/tigera-operator chart
+v3.32.1, CRDs via crd.projectcalico.org.v1 chart, resources in calico-system). Verification
+is a data-plane test (two Pods, TCP positive control → deny-all → fail both directions →
+recover), never ping/schema.
 Alternatives: keep kindnetd + declarative-only label + negative control, or remove the
 policies. PSA/Kyverno never implement the NetworkPolicy data plane. [C-002]
 
@@ -75,7 +79,6 @@ None. Both reports confirm rather than contradict earlier findings.
 
 - `bao operator raft snapshot restore -stage` exact semantics (unverified in current
   docs; test the installed binary).
-- Calico chart/Installation enum specifics (branch timed out; verify docs.tigera.io).
 - Real Cilium-vs-Calico memory footprint on the lab host (no controlled benchmark;
   measure).
 - Live-cluster behavior (seal state, real restore, L7 runtime, Tailnet Lock signer) —
