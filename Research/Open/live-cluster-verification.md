@@ -5,7 +5,7 @@ type: "research-open"
 title: "Live-Cluster Verification of OpenBao, Tailscale Ingress, and Tailnet Lock"
 status: "open"
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-31
 ---
 
 # Live-Cluster Verification of OpenBao, Tailscale Ingress, and Tailnet Lock
@@ -40,3 +40,21 @@ just need a live `make up`:
 3. **Tailnet Lock signer + destructive rebuild** — confirm ≥1 signing node and a
    disablement secret OUTSIDE the cluster; destroy a disposable kind cluster and verify the
    operator/proxy identities are signed or fail closed as documented.
+
+## Static remediation status (2026-08-31)
+
+Repository review and static verification completed these prerequisites before the live
+run:
+
+- Tailscale OAuth bootstrap now fails instead of silently leaving the Flux HelmRelease
+  unready when neither SOPS nor both environment credentials are usable.
+- A real age recipient and SOPS-encrypted OAuth file are now configured; the encrypted
+  file decrypts cleanly, the repository checker accepts it, and the transient plaintext
+  file is absent. The private age key remains off-repository and requires an independent
+  recovery backup.
+- The default-kindnetd NetworkPolicy limitation is now explicit in the operational README:
+  manifests are declarative intent, not an enforced runtime boundary.
+- `scripts/homelab_test.sh` and all Kustomize render validations pass after remediation.
+
+The research item remains open because the three live procedures above still require the
+operator's cluster, tailnet, signer, and recovery material.

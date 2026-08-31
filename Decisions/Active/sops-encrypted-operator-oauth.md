@@ -28,7 +28,8 @@ repository.
 Phase-1 research flagged that Tailscale OAuth credentials are durable API credentials
 and that a plaintext committed Secret triggers GitHub secret-scanning (real leak risk).
 The original audit stance ("bootstrap-only Secret, no SOPS") is superseded by this
-decision — recorded on kanban cards t_3d1e6633 and t_d0ad0e1e (2026-08-31 user review).
+decision — recorded in canonical Kanban card `t_34e495c6` during the 2026-08-31
+implementation and credential review.
 [[Wiki/Concepts/tailscale-operator-helm]].
 
 ## Why
@@ -50,7 +51,10 @@ host. Accepted as the cost of not committing live credentials in cleartext.
 
 Bootstrap gains a `sops` decrypt step; `.sops.yaml` creation rules scope the encrypted
 file; the age private key lives off-cluster with the other recovery material and is
-needed for rebuilds (add to the recovery/teardown inventory).
+needed for rebuilds (add to the recovery/teardown inventory). A one-bootstrap environment
+fallback may create the live Secret, but it is not durable encrypted recovery material and
+must be followed by generation of the real SOPS file. Bootstrap fails if neither source is
+usable; CI rejects placeholder-shaped SOPS metadata rather than accepting it as encrypted.
 
 ## Revisit Condition
 
@@ -60,4 +64,4 @@ store — but never revert to plaintext.
 ## Evidence Ledger
 
 - Source: [[Wiki/Concepts/tailscale-operator-helm]] (Secret contract, durable-credential risk)
-- Kanban: t_d0ad0e1e consolidated findings (correction #4) + t_3d1e6633 decision comment (2026-08-31)
+- Kanban: `t_34e495c6` (implementation, SOPS credential, and verification audit trail; 2026-08-31)
