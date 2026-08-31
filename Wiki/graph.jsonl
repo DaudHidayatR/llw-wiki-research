@@ -33,6 +33,12 @@
 {"from":"concept-tailscale-operator-helm","relation":"links-to","source":"wikilink","to":"source-deep-research-tailscale-operator"}
 {"from":"concept-tailscale-operator-helm","relation":"requires","source":"frontmatter","to":"concept-tailscale-l7-ingress"}
 {"from":"concept-tailscale-operator-helm","relation":"supported-by","source":"sources","to":"Raw/Sources/deep-research-tailscale-operator.md"}
+{"from":"decision-kindnetd-declarative-only-netpol","relation":"links-to","source":"wikilink","to":"concept-kind-networkpolicy-enforcement"}
+{"from":"decision-live-cluster-verification-after-p0p1","relation":"links-to","source":"wikilink","to":"research-open-live-cluster-verification"}
+{"from":"decision-openbao-snapshot-tailnet-nas","relation":"links-to","source":"wikilink","to":"concept-openbao-raft-recovery"}
+{"from":"decision-openbao-snapshot-tailnet-nas","relation":"links-to","source":"wikilink","to":"source-deep-research-openbao-snapshot-automation"}
+{"from":"decision-single-k8s-tag-model","relation":"links-to","source":"wikilink","to":"concept-tailscale-l7-ingress"}
+{"from":"decision-sops-encrypted-operator-oauth","relation":"links-to","source":"wikilink","to":"concept-tailscale-operator-helm"}
 {"from":"decision-use-derived-graph","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}
 {"from":"decision-use-flat-markdown-only","relation":"links-to","source":"wikilink","to":"synthesis-knowledge-os-architecture"}
 {"from":"episodic-memory-bootstrap-completed","relation":"links-to","source":"wikilink","to":"topic-knowledge-operating-systems"}
