@@ -9,8 +9,9 @@ topics:
 aliases: []
 status: "active"
 confidence: "high"
-sources: []
-source_count: 0
+sources:
+  - "Raw/Sources/deep-research-principle-yagni.md"
+source_count: 1
 related:
   - "project-homelab-devsecops"
   - "concept-principle-kiss"
@@ -82,3 +83,16 @@ Build what is needed now; defer what is not. Unused code is not free — it is r
 - [ ] For every config key: a consumer outside `config.env.example`?
 - [ ] For every manifest: referenced by a kustomization, workflow, or doc?
 - [ ] After any removal: did its config/doc/manifest siblings get removed too?
+
+## Deep-research provenance
+
+Cited primary sources were validated by Open Deep Research
+job `deep-research-job-1ff2f3611deb4f9ebffff6f6f1fc3dfc` (2026-09-02); the full source ledger lives in
+[[Raw/Sources/deep-research-principle-yagni.md]]. Top canonical references:
+
+- https://ronjeffries.com/xprog/classics/jatyagnitables
+- https://ronjeffries.com/articles/019-01ff/iter-yagni-skimp
+- https://wiki.c2.com/?YouAreGonnaNeedIt
+- https://www.projectmanagement.com/wikis/609078/extreme-programming
+- https://books.google.com/books/about/Planning_Extreme_Programming.html?id=ms9jTEm8aeEC
+- https://wiki.c2.com/?ExtremeNeed

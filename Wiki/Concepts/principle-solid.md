@@ -9,8 +9,9 @@ topics:
 aliases: []
 status: "active"
 confidence: "high"
-sources: []
-source_count: 0
+sources:
+  - "Raw/Sources/deep-research-principle-solid.md"
+source_count: 1
 related:
   - "project-homelab-devsecops"
   - "concept-principle-kiss"
@@ -86,3 +87,16 @@ SOLID was coined for OOP classes, but its *intent* — one reason to change per 
 - [ ] Could a new scanner/policy/app be added by adding files only?
 - [ ] Are paths/namespaces/images declared once, not inlined at call sites?
 - [ ] Does each file own exactly one kind of knowledge?
+
+## Deep-research provenance
+
+Cited primary sources were validated by Open Deep Research
+job `deep-research-job-2eefd99f50534a8ca7154b2b96eae4bb` (2026-09-02); the full source ledger lives in
+[[Raw/Sources/deep-research-principle-solid.md]]. Top canonical references:
+
+- https://web.archive.org/web/20150905081103/http://www.objectmentor.com/resources/articles/Principles_and_Patterns.pdf
+- http://butunclebob.com/ArticleS.UncleBob.PrinciplesOfOod
+- https://blog.cleancoder.com/uncle-bob/2014/05/08/SingleReponsibilityPrinciple.html
+- https://archive.eiffel.com/doc/manuals/technology/contract/ariane/page.html
+- https://www.cs.cmu.edu/~wing/publications/LiskovWing94.pdf
+- https://web.archive.org/web/20110714224327/http://www.objectmentor.com/resources/articles/dip.pdf

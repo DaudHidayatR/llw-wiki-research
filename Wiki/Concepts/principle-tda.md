@@ -9,8 +9,9 @@ topics:
 aliases: []
 status: "active"
 confidence: "high"
-sources: []
-source_count: 0
+sources:
+  - "Raw/Sources/deep-research-principle-tda.md"
+source_count: 1
 related:
   - "project-homelab-devsecops"
   - "concept-principle-kiss"
@@ -81,3 +82,16 @@ Tell a module what to do; don't reach past it to inspect and decide for it. In s
 - [ ] Do call sites read as intent ("wait for pod") rather than plumbing?
 - [ ] Is any domain list stated in two places?
 - [ ] Does each function either answer or act (CQS)?
+
+## Deep-research provenance
+
+Cited primary sources were validated by Open Deep Research
+job `deep-research-job-13013bf862f9454d80e4678b8960cadd` (2026-09-02); the full source ledger lives in
+[[Raw/Sources/deep-research-principle-tda.md]]. Top canonical references:
+
+- https://rmod-files.lille.inria.fr/FreeBooks/ByExample/SmalltalkByExampleNewRelease.pdf
+- https://www.infoworld.com/article/2163972/building-user-interfaces-for-object-oriented-systems-part-1.html
+- https://martinfowler.com/bliki/TellDontAsk.html
+- https://onlinebooks.library.upenn.edu/webbin/book/lookupid?key=olbp35964
+- https://toolshed.com/articles/1998-07-01-TellDontAsk.html
+- https://www.infoworld.com/article/2164222/build-user-interfaces-for-object-oriented-systems-part-2-the-visual-

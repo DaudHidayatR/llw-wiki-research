@@ -9,8 +9,9 @@ topics:
 aliases: []
 status: "active"
 confidence: "high"
-sources: []
-source_count: 0
+sources:
+  - "Raw/Sources/deep-research-principle-kiss.md"
+source_count: 1
 related:
   - "project-homelab-devsecops"
   - "concept-principle-yagni"
@@ -85,3 +86,16 @@ Prefer the simplest thing that solves the *actual* problem. Complexity is a cost
 - [ ] Are there copy-paste siblings that differ by one parameter?
 - [ ] Is hand-maintained help/config duplicated anywhere?
 - [ ] Would a newcomer find the entry point (`scripts/homelab`) boring? (It should be.)
+
+## Deep-research provenance
+
+Cited primary sources were validated by Open Deep Research
+job `deep-research-job-60f2c929124c410d9ad8d74aa0a66edd` (2026-09-02); the full source ledger lives in
+[[Raw/Sources/deep-research-principle-kiss.md]]. Top canonical references:
+
+- https://www.lockheedmartin.com/en-us/news/features/history/kelly-14-rules.html
+- https://www.lockheedmartin.com/en-us/news/features/history/u2-dragon-lady.html
+- https://web.mit.edu/Saltzer/www/publications/protection/
+- https://www.rfc-editor.org/rfc/rfc3439
+- https://www.cs.dartmouth.edu/~doug/reader.pdf
+- https://www.cs.umd.edu/class/spring2003/cmsc838p/Design/criteria.pdf

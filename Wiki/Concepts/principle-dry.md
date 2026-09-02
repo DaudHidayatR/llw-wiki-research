@@ -9,8 +9,9 @@ topics:
 aliases: []
 status: "active"
 confidence: "high"
-sources: []
-source_count: 0
+sources:
+  - "Raw/Sources/deep-research-principle-dry.md"
+source_count: 1
 related:
   - "project-homelab-devsecops"
   - "concept-principle-kiss"
@@ -83,3 +84,16 @@ Every piece of knowledge gets one authoritative representation. The cost of dupl
 - [ ] Any idiom past its third repetition?
 - [ ] Security-relevant blocks (sanitizers, permission lists) owned by one helper?
 - [ ] When two files must agree — does one generate or validate the other?
+
+## Deep-research provenance
+
+Cited primary sources were validated by Open Deep Research
+job `deep-research-job-167395962d704f8093d88d8bd1d23b9a` (2026-09-02); the full source ledger lives in
+[[Raw/Sources/deep-research-principle-dry.md]]. Top canonical references:
+
+- https://pragprog.com/tips
+- https://www.artima.com/articles/orthogonality-and-the-dry-principle
+- https://pragprog.com/titles/tpp20/the-pragmatic-programmer-20th-anniversary-edition
+- https://www.gnu.org/software/bash/manual/bash.html
+- https://docs.github.com/en/actions/sharing-automations/reusing-workflows
+- https://docs.gitlab.com/ci/yaml/yaml_optimization/
