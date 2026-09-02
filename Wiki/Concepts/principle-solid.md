@@ -1,3 +1,31 @@
+---
+schema_version: 2
+id: "concept-principle-solid"
+type: "concept"
+title: "SOLID — Applied to Shell & Declarative Infrastructure"
+topics:
+  - "homelab-devsecops"
+  - "solid"
+aliases: []
+status: "active"
+confidence: "high"
+sources: []
+source_count: 0
+related:
+  - "project-homelab-devsecops"
+  - "concept-principle-kiss"
+  - "concept-principle-yagni"
+  - "concept-principle-tda"
+  - "concept-principle-dry"
+relationships:
+  - "applies-to|project-homelab-devsecops"
+supersedes: []
+superseded_by: []
+last_verified: "2026-09-02"
+review_after: "2026-12-02"
+created: 2026-09-02
+updated: 2026-09-02
+---
 # SOLID — Applied to Shell & Declarative Infrastructure
 
 > Wiki/Concepts/principle-solid.md · part of the [engineering principles series](../Projects/homelab-devsecops.md)

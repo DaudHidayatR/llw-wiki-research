@@ -1,3 +1,31 @@
+---
+schema_version: 2
+id: "concept-principle-tda"
+type: "concept"
+title: "TDA — Tell, Don't Ask and Command–Query Separation"
+topics:
+  - "homelab-devsecops"
+  - "tell-dont-ask"
+aliases: []
+status: "active"
+confidence: "high"
+sources: []
+source_count: 0
+related:
+  - "project-homelab-devsecops"
+  - "concept-principle-kiss"
+  - "concept-principle-yagni"
+  - "concept-principle-solid"
+  - "concept-principle-dry"
+relationships:
+  - "applies-to|project-homelab-devsecops"
+supersedes: []
+superseded_by: []
+last_verified: "2026-09-02"
+review_after: "2026-12-02"
+created: 2026-09-02
+updated: 2026-09-02
+---
 # TDA — Tell, Don't Ask (and Command–Query Separation)
 
 > Wiki/Concepts/principle-tda.md · part of the [engineering principles series](../Projects/homelab-devsecops.md)

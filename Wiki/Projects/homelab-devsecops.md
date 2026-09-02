@@ -103,3 +103,15 @@ make CI validation-only. [C-001]
   - source: [[Raw/Sources/deep-research-config-pinning.md#Normalized Content]]
 - C-008 | confidence=high | Actions should be pinned to full SHAs and scanner images by digest; concrete pins require manual upstream verification.
   - source: [[Raw/Sources/deep-research-config-pinning.md#Normalized Content]]
+
+## Engineering principles series (2026-09-02 code review)
+
+The 2026-09-02 wiki-vs-code review (repo snapshot `e863f90`, repo test suite PASS) recorded per-principle findings and refactor proposals in five concept docs:
+
+- [[Wiki/Concepts/principle-kiss|KISS]] — giant-function smells (`command_cluster_up`, openbao bootstrap), Makefile target duplication; verified file:line evidence.
+- [[Wiki/Concepts/principle-yagni|YAGNI]] — dead helpers with zero callers, dead config keys, orphaned `serve-watcher.yaml`.
+- [[Wiki/Concepts/principle-solid|SOLID (shell translation)]] — SRP violations in lifecycle/bootstrap commands; positive layering examples.
+- [[Wiki/Concepts/principle-tda|TDA / CQS]] — raw `kubectl` probes bypassing existing helpers; parallel policy tables.
+- [[Wiki/Concepts/principle-dry|DRY]] — scanner-version drift across config/CI, duplicated sanitizer block, 17× repeated probe idiom.
+
+Each doc separates documented facts from inference, cites canonical sources, and labels improvements as PROPOSAL — feed them into the t_81abdc07 simplification subtree.

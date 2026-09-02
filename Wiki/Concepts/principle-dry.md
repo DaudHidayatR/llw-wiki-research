@@ -1,3 +1,31 @@
+---
+schema_version: 2
+id: "concept-principle-dry"
+type: "concept"
+title: "DRY — Don't Repeat Yourself"
+topics:
+  - "homelab-devsecops"
+  - "dry"
+aliases: []
+status: "active"
+confidence: "high"
+sources: []
+source_count: 0
+related:
+  - "project-homelab-devsecops"
+  - "concept-principle-kiss"
+  - "concept-principle-yagni"
+  - "concept-principle-solid"
+  - "concept-principle-tda"
+relationships:
+  - "applies-to|project-homelab-devsecops"
+supersedes: []
+superseded_by: []
+last_verified: "2026-09-02"
+review_after: "2026-12-02"
+created: 2026-09-02
+updated: 2026-09-02
+---
 # DRY — Don't Repeat Yourself
 
 > Wiki/Concepts/principle-dry.md · part of the [engineering principles series](../Projects/homelab-devsecops.md)
